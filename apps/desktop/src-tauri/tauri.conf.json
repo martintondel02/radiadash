@@ -28,8 +28,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["rpm", "appimage"],
-    "category": "Science",
+    "targets": [
+      "rpm",
+      "appimage"
+    ],
+    "category": "Education",
     "shortDescription": "RadiaCode 110 dashboard and spectrometer",
     "longDescription": "Live counts, dose, spectra, isotope candidates and maps for RadiaCode radiation detectors.",
     "icon": [
@@ -37,6 +40,13 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.png"
-    ]
+    ],
+    "linux": {
+      "rpm": {
+        "files": {
+          "/usr/lib/udev/rules.d/60-radiacode.rules": "../../../packaging/60-radiacode.rules"
+        }
+      }
+    }
   }
 }

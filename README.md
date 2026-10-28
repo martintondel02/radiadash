@@ -62,12 +62,22 @@ sudo cp packaging/60-radiacode.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
+## Install (RPM)
+
+```bash
+sudo dnf install ./Radiadash-0.1.0-1.x86_64.rpm
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+The package includes the USB udev rule. See [docs/packaging.md](docs/packaging.md)
+for contents and build details.
+
 ## Build and run
 
 ```bash
 pnpm install
-pnpm tauri dev     # app
-pnpm tauri build   # RPM + AppImage
+pnpm tauri dev                 # development
+pnpm tauri build --bundles rpm # package (RPM)
 ```
 
 Without a device, use the simulator:
@@ -102,7 +112,7 @@ apps/desktop            Tauri v2 shell + React/TypeScript UI
 
 See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md) and
 [docs/isotopes.md](docs/isotopes.md), [docs/calibration.md](docs/calibration.md) and
-[docs/map.md](docs/map.md).
+[docs/map.md](docs/map.md) and [docs/packaging.md](docs/packaging.md).
 
 ## Roadmap
 
@@ -114,7 +124,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protoc
 | M3 ✅ | Spectrum analysis, isotope library, fingerprint overlay, evidence UI |
 | M4 ✅ | Calibration wizard, distributions, Geiger audio, layout density |
 | M5 ✅ | Map view, `.rctrk`/GPX import, dose-coloured track (live geotagging pending) |
-| M6 | Device settings, packaging, docs, release |
+| M6 🚧 | RPM packaging ✅ · device settings, AppImage, release workflow pending |
 
 ## Credits and licence
 
