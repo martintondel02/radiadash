@@ -3,9 +3,11 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
-> Status: **M0/M1** — protocol core, transports and a CLI probe work; the UI is a
-> static scaffold until M2 wires it to live data. Tested against the RadiaCode 110
-> protocol documentation and the reference Python implementation.
+> Status: **M0/M1** — protocol core, BLE transport and a CLI probe work against a
+> real RC-110 (firmware 4.14); the UI is a static scaffold until M2 wires it to live
+> data.
+
+![Radiadash UI scaffold](docs/screenshot-m0.png)
 
 ## Why
 
