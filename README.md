@@ -3,11 +3,10 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
-> Status: **M2** — live dashboard wired to a real RC-110 over BLE **and** USB:
-> counts, dose rate, accumulated dose, battery, temperature and spectrum are
-> streaming into SQLite. Isotope identification lands in M3.
+> Status: **M3** — live dashboard plus isotope candidate ranking with an energy
+> fingerprint overlay, tested on a real RC-110 over BLE and USB.
 
-![Radiadash live dashboard](docs/screenshot-m2.png)
+![Radiadash spectrum and isotope candidates](docs/screenshot-m3.png)
 
 ## Why
 
@@ -30,6 +29,8 @@ Radiadash aims to be a fast, local-first desktop console:
 - Live CPS with error bars and a rolling chart, dose rate, accumulated dose
 - Device panel: serial, firmware, battery, temperature, transport, flags
 - Spectrum read every 60 s, stored and rendered with the device calibration
+- Isotope candidates (35 nuclides, 100 lines) with confidence bands, a per-line
+  evidence table, a library-line fingerprint overlay and a calibration hint
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
 
@@ -86,7 +87,8 @@ crates/radiadash-probe  CLI for bring-up, fixtures and diagnostics
 apps/desktop            Tauri v2 shell + React/TypeScript UI
 ```
 
-See [docs/architecture.md](docs/architecture.md) and [docs/protocol.md](docs/protocol.md).
+See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md) and
+[docs/isotopes.md](docs/isotopes.md).
 
 ## Roadmap
 
@@ -95,7 +97,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/protocol.md](docs/pro
 | M0 ✅ | Repository, CI, Tauri/React scaffold, design tokens |
 | M1 ✅ | Protocol core, USB + BLE, probe CLI, simulator, tests |
 | M2 ✅ | Live dashboard, SQLite sessions, units, auto-connect |
-| M3 | Spectrum view, calibration, isotope library + fingerprint overlay |
+| M3 ✅ | Spectrum analysis, isotope library, fingerprint overlay, evidence UI |
 | M4 | Workspaces, ranges, distributions, Geiger audio |
 | M5 | Geotagging, map view, `.rctrk`/GPX import, exports |
 | M6 | Device settings, packaging, docs, release |

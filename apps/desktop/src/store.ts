@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as ipc from "./lib/ipc";
-import type { Series, Snapshot, SpectrumPayload, Telemetry } from "./lib/types";
+import type { Analysis, Series, Snapshot, SpectrumPayload, Telemetry } from "./lib/types";
 import type { CountUnit, DoseRateUnit, DoseUnit } from "./lib/units";
 
 const HISTORY_LIMIT = 900;
@@ -18,6 +18,7 @@ interface AppStore {
   latest: Telemetry | null;
   history: Telemetry[];
   spectrum: SpectrumPayload | null;
+  analysis: Analysis | null;
   series: Series | null;
   startedAt: number | null;
   units: Units;
@@ -61,6 +62,30 @@ function demoSpectrum(): SpectrumPayload {
   return { ts: Date.now(), duration_s: 900, a0: 4.282, a1: 2.367718, a2: 0.000342982, counts };
 }
 
+function demoAnalysis(): Analysis {
+  const evidence = (lines: [number, number][], matched: boolean) =>
+    lines.map(([energy, intensity], index) => ({
+      line_energy_kev: energy,
+      intensity,
+      matched: matched && index < 2,
+      peak_energy_kev: matched && index < 2 ? energy - 2 : null,
+      delta_kev: matched && index < 2 ? -2 : null,
+      significance: matched && index < 2 ? 24 : null,
+    }));
+  return {
+    peaks: [],
+    candidates: [
+      { id: "Cs-137", name: "Cesium-137", half_life: "30.17 y", category: "fallout", confidence: "high", score: 0.92, coverage: 1, matched_lines: 1, total_lines: 1, evidence: evidence([[661.657, 85.1]], true) },
+      { id: "K-40", name: "Potassium-40", half_life: "1.25e9 y", category: "norm", confidence: "medium", score: 0.64, coverage: 1, matched_lines: 1, total_lines: 1, evidence: evidence([[1460.822, 10.66]], true) },
+      { id: "Bi-214", name: "Bismuth-214", half_life: "19.9 min", category: "norm", confidence: "medium", score: 0.41, coverage: 0.4, matched_lines: 3, total_lines: 6, evidence: evidence([[609.312, 45.5], [1764.494, 15.3], [1120.294, 14.9]], true) },
+      { id: "Tl-208", name: "Thallium-208", half_life: "3.05 min", category: "norm", confidence: "medium", score: 0.36, coverage: 0.5, matched_lines: 2, total_lines: 4, evidence: evidence([[2614.511, 99.8], [583.191, 85.0]], true) },
+    ],
+    library_version: "2026.10-r1",
+    duration_s: 900,
+    total_counts: 80157,
+  };
+}
+
 export const useApp = create<AppStore>((set, get) => ({
   status: "disconnected",
   message: null,
@@ -68,6 +93,7 @@ export const useApp = create<AppStore>((set, get) => ({
   latest: null,
   history: [],
   spectrum: null,
+  analysis: null,
   series: null,
   startedAt: null,
   units: { doseRate: "µSv/h", dose: "µSv", count: "cps" },
@@ -87,6 +113,7 @@ export const useApp = create<AppStore>((set, get) => ({
         latest: { ...seedHistory[seedHistory.length - 1], session_id: 0 },
         history: seedHistory,
         spectrum: demoSpectrum(),
+        analysis: demoAnalysis(),
       });
       setInterval(() => {
         elapsed += 1;
@@ -120,6 +147,7 @@ export const useApp = create<AppStore>((set, get) => ({
         }
       }),
       ipc.onSpectrum((spectrum) => set({ spectrum })),
+      ipc.onAnalysis((analysis) => set({ analysis })),
       ipc.onDeviceError((message) => set({ message })),
     ]);
     void unlisten;
@@ -136,6 +164,8 @@ export const useApp = create<AppStore>((set, get) => ({
       });
       const spectrum = await ipc.getLatestSpectrum();
       if (spectrum) set({ spectrum });
+      const analysis = await ipc.getLatestAnalysis();
+      if (analysis) set({ analysis });
       if (snapshot.status === "connected") await get().refreshSeries(3600);
     } catch (error) {
       set({ status: "error", message: String(error) });

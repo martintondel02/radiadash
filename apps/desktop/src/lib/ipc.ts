@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { Series, Snapshot, SpectrumPayload, Telemetry, DeviceIdentity } from "./types";
+import type { Analysis, Series, Snapshot, SpectrumPayload, Telemetry, DeviceIdentity } from "./types";
 
 export type TransportChoice =
   | { kind: "auto" }
@@ -34,6 +34,10 @@ export async function getLatestSpectrum(): Promise<SpectrumPayload | null> {
   return invoke<SpectrumPayload | null>("get_latest_spectrum");
 }
 
+export async function getLatestAnalysis(): Promise<Analysis | null> {
+  return invoke<Analysis | null>("get_latest_analysis");
+}
+
 export async function listDevices(): Promise<DeviceList> {
   return invoke<DeviceList>("list_devices");
 }
@@ -58,8 +62,12 @@ export function onSpectrum(cb: (value: SpectrumPayload) => void): Promise<Unlist
   return listen<SpectrumPayload>("spectrum", (event) => cb(event.payload));
 }
 
+export function onAnalysis(cb: (value: Analysis) => void): Promise<UnlistenFn> {
+  return listen<Analysis>("analysis", (event) => cb(event.payload));
+}
+
 export function onDeviceError(cb: (message: string) => void): Promise<UnlistenFn> {
   return listen<string>("device-error", (event) => cb(event.payload));
 }
 
-export type { DeviceIdentity, Series, Snapshot, SpectrumPayload, Telemetry };
+export type { Analysis, DeviceIdentity, Series, Snapshot, SpectrumPayload, Telemetry };

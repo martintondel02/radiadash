@@ -11,7 +11,7 @@ import {
   type DoseRateUnit,
   type DoseUnit,
 } from "./lib/units";
-import type { SpectrumPayload, Telemetry } from "./lib/types";
+import type { Candidate, SpectrumPayload, Telemetry } from "./lib/types";
 import { useApp } from "./store";
 
 type NavKey = "overview" | "spectrum" | "rate" | "map" | "history" | "device";
@@ -69,7 +69,26 @@ function energyOf(spectrum: SpectrumPayload, channel: number) {
   return spectrum.a0 + spectrum.a1 * channel + spectrum.a2 * channel * channel;
 }
 
-function SpectrumChart({ spectrum, height = 180 }: { spectrum: SpectrumPayload | null; height?: number }) {
+function channelForEnergy(spectrum: SpectrumPayload, energyKeV: number) {
+  const { a0, a1, a2 } = spectrum;
+  if (Math.abs(a2) < 1e-9) return (energyKeV - a0) / a1;
+  const disc = a1 * a1 - 4 * a2 * (a0 - energyKeV);
+  if (disc < 0) return Number.NaN;
+  const root = Math.sqrt(disc);
+  const first = (-a1 + root) / (2 * a2);
+  const second = (-a1 - root) / (2 * a2);
+  return first > 0 && first < spectrum.counts.length ? first : second;
+}
+
+function SpectrumChart({
+  spectrum,
+  height = 180,
+  overlay,
+}: {
+  spectrum: SpectrumPayload | null;
+  height?: number;
+  overlay?: { lines: { energy: number; matched: boolean }[] };
+}) {
   const bars = useMemo(() => {
     if (!spectrum) return [] as number[];
     const counts = spectrum.counts;
@@ -90,12 +109,31 @@ function SpectrumChart({ spectrum, height = 180 }: { spectrum: SpectrumPayload |
             key={index}
             x={index}
             y={height - value * (height - 4)}
-            width={0.8}
+            width={1.02}
             height={value * (height - 4)}
             fill="var(--accent)"
-            opacity={0.78}
+            opacity={0.7}
           />
         ))}
+        {overlay?.lines.map((line, index) => {
+          const channel = channelForEnergy(spectrum, line.energy);
+          if (!Number.isFinite(channel) || channel < 0 || channel >= spectrum.counts.length) return null;
+          const x = (channel / (spectrum.counts.length - 1)) * width;
+          return (
+            <g key={`${line.energy}-${index}`}>
+              <line
+                x1={x}
+                y1={2}
+                x2={x}
+                y2={height * (line.matched ? 0.55 : 0.38)}
+                stroke={line.matched ? "var(--amber)" : "var(--muted)"}
+                strokeWidth={line.matched ? 1.4 : 0.8}
+                strokeDasharray={line.matched ? undefined : "2 2"}
+                opacity={line.matched ? 0.95 : 0.55}
+              />
+            </g>
+          );
+        })}
         <line x1="0" y1={height - 0.5} x2={width} y2={height - 0.5} stroke="var(--border)" strokeWidth="0.6" />
       </svg>
       <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
@@ -234,13 +272,14 @@ function ConnectionPanel() {
           )}
         </>
       )}
-      <div className="mt-2 px-1 text-[10px] text-[var(--muted)]">v0.1.0 · M2 live</div>
+      <div className="mt-2 px-1 text-[10px] text-[var(--muted)]">v0.1.0 · M3</div>
     </div>
   );
 }
 
 function Overview({ now }: { now: number }) {
-  const { latest, history, spectrum, identity, units, startedAt } = useApp();
+  const { latest, history, spectrum, identity, units, startedAt, analysis } = useApp();
+  const candidates = analysis?.candidates ?? [];
   const cpsValues = history.slice(-360).map((t) => t.cps);
 
   const doseRate = latest ? convertDoseRate(latest.dose_rate_usvh, units.doseRate) : null;
@@ -339,68 +378,173 @@ function Overview({ now }: { now: number }) {
         </dl>
       </Card>
 
-      <Card title="Isotope candidates" className="lg:col-span-2">
-        <div className="flex flex-wrap gap-2">
-          {[
-            { name: "Cs-137", conf: "pending", lines: "661.7 keV · M3" },
-            { name: "K-40", conf: "pending", lines: "1460.8 keV · M3" },
-            { name: "Bi-214", conf: "pending", lines: "609.3 · 1120.3 · 1764.5" },
-            { name: "Pb-214", conf: "pending", lines: "295.2 · 351.9" },
-          ].map((iso) => (
-            <div key={iso.name} className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
-              <div className="flex items-center gap-2">
-                <span className="num text-sm font-medium">{iso.name}</span>
-                <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[var(--muted)]">
-                  {iso.conf}
-                </span>
+      <Card
+        title="Isotope candidates"
+        className="lg:col-span-2"
+        action={<span className="num text-[10px] text-[var(--muted)]">library v{analysis?.library_version ?? "—"}</span>}
+      >
+        {candidates.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-[var(--border)] p-4 text-center text-xs text-[var(--muted)]">
+            Collecting spectrum — candidates appear after the first analysis.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {candidates.slice(0, 4).map((candidate) => (
+              <div key={candidate.id} className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className="num text-sm font-medium">{candidate.id}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${confidenceClass(candidate.confidence)}`}>
+                    {candidate.confidence}
+                  </span>
+                </div>
+                <div className="num mt-1 text-[10px] text-[var(--muted)]">
+                  {candidate.matched_lines}/{candidate.total_lines} lines · score {candidate.score.toFixed(2)}
+                </div>
               </div>
-              <div className="num mt-1 text-[10px] text-[var(--muted)]">{iso.lines}</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
         <p className="mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
-          Peak matching and the isotope library land in M3. The spectrum above is live from the device.
+          Candidate identification from peak matching. Not a certified measurement — verify with a calibrated instrument.
         </p>
       </Card>
     </div>
   );
 }
 
+function confidenceClass(confidence: Candidate["confidence"]) {
+  switch (confidence) {
+    case "high":
+      return "bg-[var(--accent-dim)] text-[var(--text)]";
+    case "medium":
+      return "border border-[var(--amber)] text-[var(--amber)]";
+    case "low":
+      return "border border-[var(--border)] text-[var(--muted)]";
+    default:
+      return "border border-[var(--border)] text-[var(--muted)]";
+  }
+}
+
+function calibrationHint(candidate: Candidate): string | null {
+  const deltas = candidate.evidence
+    .filter((item) => item.matched && item.delta_kev != null && item.intensity >= 5)
+    .map((item) => item.delta_kev as number)
+    .sort((a, b) => a - b);
+  if (deltas.length === 0) return null;
+  const median = deltas[Math.floor(deltas.length / 2)];
+  if (Math.abs(median) < 4) return null;
+  return `Median energy offset ${median > 0 ? "+" : ""}${median.toFixed(1)} keV on matched lines — the device calibration may need adjusting.`;
+}
+
 function SpectrumView() {
-  const { spectrum } = useApp();
-  const peaks = useMemo(() => {
-    if (!spectrum) return [];
-    const counts = spectrum.counts;
-    const out: { channel: number; energy: number; counts: number }[] = [];
-    for (let i = 2; i < counts.length - 2; i++) {
-      const value = counts[i];
-      if (value > 50 && value > counts[i - 1] && value >= counts[i + 1] && value > counts[i - 2] && value >= counts[i + 2]) {
-        out.push({ channel: i, energy: energyOf(spectrum, i), counts: value });
+  const { spectrum, analysis } = useApp();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const candidates = analysis?.candidates ?? [];
+  const selected = candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0] ?? null;
+
+  const overlay = selected
+    ? {
+        lines: selected.evidence.map((item) => ({ energy: item.line_energy_kev, matched: item.matched })),
       }
-    }
-    return out.sort((a, b) => b.counts - a.counts).slice(0, 8).sort((a, b) => a.channel - b.channel);
-  }, [spectrum]);
+    : undefined;
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      <Card title="Energy spectrum" className="lg:col-span-2">
-        <SpectrumChart spectrum={spectrum} height={320} />
+      <Card
+        title={`Energy spectrum${selected ? ` · ${selected.id}` : ""}`}
+        className="lg:col-span-2"
+        action={
+          <span className="text-[10px] text-[var(--muted)]">
+            {analysis ? `${analysis.peaks.length} peaks · ${analysis.total_counts.toLocaleString()} counts` : "analysing…"}
+          </span>
+        }
+      >
+        <SpectrumChart spectrum={spectrum} height={320} overlay={overlay} />
+        <p className="mt-2 text-[10px] text-[var(--muted)]">
+          Amber sticks are library lines matched to a peak; dashed grey sticks are expected but not observed.
+        </p>
       </Card>
-      <Card title="Detected peaks">
-        {peaks.length === 0 && <p className="text-xs text-[var(--muted)]">No peaks above threshold yet.</p>}
-        <ul className="space-y-1.5 text-xs">
-          {peaks.map((peak) => (
-            <li key={peak.channel} className="flex items-center justify-between gap-2">
-              <span className="num text-[var(--accent)]">{peak.energy.toFixed(1)} keV</span>
-              <span className="num text-[var(--muted)]">ch {peak.channel} · {peak.counts.toLocaleString()}</span>
-            </li>
+
+      <div className="space-y-4">
+        <Card title="Candidates">
+          {candidates.length === 0 && <p className="text-xs text-[var(--muted)]">No candidates yet — waiting for a spectrum.</p>}
+          <div className="space-y-1.5">
+            {candidates.map((candidate) => (
+              <button
+                key={candidate.id}
+                onClick={() => setSelectedId(candidate.id)}
+                className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                  selected?.id === candidate.id
+                    ? "border-[var(--accent-dim)] bg-[var(--panel-2)]"
+                    : "border-[var(--border)] hover:bg-[var(--panel-2)]"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="num text-sm">{candidate.id}</span>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${confidenceClass(candidate.confidence)}`}>
+                    {candidate.confidence}
+                  </span>
+                </div>
+                <div className="num mt-0.5 text-[10px] text-[var(--muted)]">
+                  {candidate.matched_lines}/{candidate.total_lines} lines · coverage {(candidate.coverage * 100).toFixed(0)}% · score{" "}
+                  {candidate.score.toFixed(2)}
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card title="Evidence">
+          {selected ? (
+            <table className="w-full text-[11px]">
+              <thead>
+                <tr className="text-left text-[var(--muted)]">
+                  <th className="pb-1 font-normal">Line</th>
+                  <th className="pb-1 text-right font-normal">I</th>
+                  <th className="pb-1 text-right font-normal">Peak</th>
+                  <th className="pb-1 text-right font-normal">Δ</th>
+                </tr>
+              </thead>
+              <tbody className="num">
+                {selected.evidence.map((item) => (
+                  <tr key={`${item.line_energy_kev}-${item.intensity}`} className={item.matched ? "" : "text-[var(--muted)]"}>
+                    <td className="py-0.5">
+                      {item.matched ? "✔" : "·"} {item.line_energy_kev.toFixed(1)}
+                    </td>
+                    <td className="py-0.5 text-right">{item.intensity.toFixed(0)}%</td>
+                    <td className="py-0.5 text-right">{item.peak_energy_kev?.toFixed(1) ?? "—"}</td>
+                    <td className="py-0.5 text-right">
+                      {item.delta_kev != null ? `${item.delta_kev > 0 ? "+" : ""}${item.delta_kev.toFixed(1)}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-xs text-[var(--muted)]">Select a candidate.</p>
+          )}
+          {selected && (
+            <p className="mt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+              {selected.name} · {selected.half_life} · {selected.category}. A single line can belong to several nuclides.
+            </p>
+          )}
+          {selected && calibrationHint(selected) && (
+            <p className="mt-1 text-[10px] leading-relaxed text-[var(--amber)]">{calibrationHint(selected)}</p>
+          )}
+        </Card>
+      </div>
+
+      <Card title="Detected peaks" className="lg:col-span-3">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {(analysis?.peaks ?? []).slice(0, 12).map((peak) => (
+            <div key={peak.channel} className="rounded border border-[var(--border)] px-2 py-1.5">
+              <div className="num text-sm text-[var(--accent)]">{peak.energy_kev.toFixed(1)} keV</div>
+              <div className="num text-[10px] text-[var(--muted)]">
+                net {Math.round(peak.net).toLocaleString()} · {peak.significance.toFixed(1)}σ
+              </div>
+            </div>
           ))}
-        </ul>
-        {spectrum && (
-          <p className="num mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
-            a0={spectrum.a0.toFixed(3)} a1={spectrum.a1.toFixed(5)} a2={spectrum.a2.toExponential(2)}
-          </p>
-        )}
+        </div>
       </Card>
     </div>
   );
@@ -593,7 +737,7 @@ export default function App() {
             </div>
           )}
           <p className="mt-6 text-center text-[10px] text-[var(--muted)]">
-            M2 · live data over BLE/USB · stored locally in SQLite · no cloud
+            M3 · live data over BLE/USB · isotope candidates from the local library · no cloud
           </p>
         </div>
       </main>

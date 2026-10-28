@@ -6,6 +6,7 @@ mod store;
 use std::sync::Arc;
 
 use manager::{Cmd, ConnectRequest, Shared, Snapshot, SpectrumPayload};
+use radiadash_core::isotope::Analysis;
 use serde::Serialize;
 use store::{Db, Series};
 use tauri::{Manager, State};
@@ -118,6 +119,29 @@ async fn get_latest_spectrum(state: State<'_, AppState>) -> Result<Option<Spectr
 }
 
 #[tauri::command]
+async fn get_latest_analysis(state: State<'_, AppState>) -> Result<Option<Analysis>, String> {
+    {
+        let snapshot = state.shared.snapshot.read().await;
+        if let Some(analysis) = &snapshot.analysis {
+            return Ok(Some(analysis.clone()));
+        }
+    }
+
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    if let Some(stored) = db.latest_spectrum().map_err(|e| e.to_string())? {
+        let spectrum = radiadash_core::types::Spectrum {
+            duration_s: stored.duration_s,
+            a0: stored.a0,
+            a1: stored.a1,
+            a2: stored.a2,
+            counts: stored.counts,
+        };
+        return Ok(Some(radiadash_core::isotope::analyze(&spectrum)));
+    }
+    Ok(None)
+}
+
+#[tauri::command]
 async fn list_devices() -> Result<DeviceList, String> {
     let usb = radiadash_core::usb::list().await.map_err(|e| e.to_string())?;
     let ble = radiadash_core::ble::scan(4)
@@ -183,6 +207,7 @@ pub fn run() {
             get_snapshot,
             get_series,
             get_latest_spectrum,
+            get_latest_analysis,
             list_devices
         ])
         .run(tauri::generate_context!())

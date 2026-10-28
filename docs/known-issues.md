@@ -26,7 +26,16 @@ released yet. Tracked here instead of pinning an old Tauri.
    M2 seeds those values from the last database row and from the temperature
    register at connect, then updates them when a new rare record arrives.
 
+## Isotope analysis
+
+- The device calibration currently reads K-40 at ~1443 keV instead of 1460.8
+  (−1.2 %) and Tl-208 at 2599 instead of 2614.5. The UI surfaces the median
+  offset; a calibration wizard is planned.
+- Below ~95 keV the spectrum is dominated by a detector artefact, so low-energy
+  lines are ignored except for Am-241.
+- Candidates are ranked by line coverage and energy agreement only; no
+  efficiency model and no activity quantification.
+
 ## UI
 
-The M0 UI is a static scaffold with demo values; it is not connected to the device
-until M2.
+Map and history views are placeholders (M5/M6).

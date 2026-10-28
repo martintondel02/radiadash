@@ -15,6 +15,7 @@ pub mod ble;
 pub mod decode;
 pub mod device;
 pub mod error;
+pub mod isotope;
 pub mod protocol;
 pub mod spectrum;
 pub mod transport;

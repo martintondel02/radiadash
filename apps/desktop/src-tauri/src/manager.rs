@@ -108,6 +108,7 @@ pub struct Snapshot {
     pub dose_scale: Option<DoseScale>,
     pub unit_flags: Option<UnitFlags>,
     pub spectrum: Option<SpectrumPayload>,
+    pub analysis: Option<radiadash_core::isotope::Analysis>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -303,8 +304,14 @@ async fn run_connection(
                             if let Err(err) = with_db(db, |db| db.insert_spectrum(Some(session_id), payload.ts, &spectrum)) {
                                 let _ = app.emit("device-error", format!("store spectrum: {err}"));
                             }
-                            shared.snapshot.write().await.spectrum = Some(payload.clone());
+                            let analysis = radiadash_core::isotope::analyze(&spectrum);
+                            {
+                                let mut snapshot = shared.snapshot.write().await;
+                                snapshot.spectrum = Some(payload.clone());
+                                snapshot.analysis = Some(analysis.clone());
+                            }
                             let _ = app.emit("spectrum", payload);
+                            let _ = app.emit("analysis", analysis);
                         }
                         Err(err) => {
                             let _ = app.emit("device-error", format!("spectrum read failed: {err}"));

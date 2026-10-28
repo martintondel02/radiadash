@@ -44,6 +44,8 @@ enum Command {
     Monitor(MonitorArgs),
     /// Fetch a spectrum, list peaks and optionally save it as JSON.
     Spectrum(SpectrumArgs),
+    /// Analyse a spectrum and print isotope candidates with evidence.
+    Analyze(AnalyzeArgs),
     /// Record records and spectra to a JSONL file.
     Record(RecordArgs),
     /// Show a synthetic spectrum without a device.
@@ -108,6 +110,18 @@ struct SpectrumArgs {
 }
 
 #[derive(Args, Debug)]
+struct AnalyzeArgs {
+    #[command(flatten)]
+    conn: Conn,
+    /// Maximum candidates to print.
+    #[arg(long, default_value_t = 6)]
+    top: usize,
+    /// Use the accumulated spectrum.
+    #[arg(long)]
+    accum: bool,
+}
+
+#[derive(Args, Debug)]
 struct RecordArgs {
     #[command(flatten)]
     conn: Conn,
@@ -138,6 +152,7 @@ async fn main() -> Result<()> {
         Command::Regs(args) => regs(args).await,
         Command::Monitor(args) => monitor(args).await,
         Command::Spectrum(args) => spectrum(args).await,
+        Command::Analyze(args) => analyze(args).await,
         Command::Record(args) => record(args).await,
         Command::Sim { duration, seed } => {
             sim(duration, seed);
@@ -496,6 +511,60 @@ async fn spectrum(args: SpectrumArgs) -> Result<()> {
         std::fs::write(path, serde_json::to_vec_pretty(&spectrum)?)
             .with_context(|| format!("write {path}"))?;
         println!("\nsaved {path}");
+    }
+    Ok(())
+}
+
+async fn analyze(args: AnalyzeArgs) -> Result<()> {
+    let mut device = connect(&args.conn).await?;
+    let spectrum = if args.accum {
+        device.spectrum_accumulated().await?
+    } else {
+        device.spectrum().await?
+    };
+    let analysis = radiadash_core::isotope::analyze(&spectrum);
+
+    println!(
+        "spectrum: {} counts, {:.0}s live, library {}",
+        analysis.total_counts, analysis.duration_s, analysis.library_version
+    );
+    println!("\npeaks ({} above threshold)", analysis.peaks.len());
+    for peak in analysis.peaks.iter().take(12) {
+        println!(
+            "  {:8.2} keV  net={:8.0} ±{:.0}  significance={:5.1}  fwhm={:.1} keV",
+            peak.energy_kev, peak.net, peak.net_err, peak.significance, peak.fwhm_kev
+        );
+    }
+
+    println!("\ncandidates");
+    for candidate in analysis.candidates.iter().take(args.top) {
+        println!(
+            "  {:<8} {:<8} score={:.2} coverage={:.0}%  lines {}/{}  {}",
+            candidate.id,
+            candidate.confidence,
+            candidate.score,
+            candidate.coverage * 100.0,
+            candidate.matched_lines,
+            candidate.total_lines,
+            candidate.half_life
+        );
+        for evidence in &candidate.evidence {
+            if evidence.matched {
+                println!(
+                    "      ✔ {:8.2} keV ({:5.1}%) → peak {:8.2} keV  Δ={:+.2}  sig={:.1}",
+                    evidence.line_energy_kev,
+                    evidence.intensity,
+                    evidence.peak_energy_kev.unwrap_or(0.0),
+                    evidence.delta_kev.unwrap_or(0.0),
+                    evidence.significance.unwrap_or(0.0)
+                );
+            } else if evidence.intensity >= 5.0 {
+                println!(
+                    "      ✘ {:8.2} keV ({:5.1}%) not seen",
+                    evidence.line_energy_kev, evidence.intensity
+                );
+            }
+        }
     }
     Ok(())
 }

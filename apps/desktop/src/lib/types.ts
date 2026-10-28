@@ -54,10 +54,52 @@ export interface Snapshot {
   dose_scale: "roentgen" | "micro_sievert" | null;
   unit_flags: UnitFlags | null;
   spectrum: SpectrumPayload | null;
+  analysis: Analysis | null;
 }
 
 export interface Series {
   ts: number[];
   cps: number[];
   dose_rate_usvh: number[];
+}
+
+export interface Peak {
+  channel: number;
+  energy_kev: number;
+  net: number;
+  net_err: number;
+  significance: number;
+  fwhm_kev: number;
+  gross: number;
+  background: number;
+}
+
+export interface Evidence {
+  line_energy_kev: number;
+  intensity: number;
+  matched: boolean;
+  peak_energy_kev: number | null;
+  delta_kev: number | null;
+  significance: number | null;
+}
+
+export interface Candidate {
+  id: string;
+  name: string;
+  half_life: string;
+  category: string;
+  confidence: "high" | "medium" | "low" | "none";
+  score: number;
+  coverage: number;
+  matched_lines: number;
+  total_lines: number;
+  evidence: Evidence[];
+}
+
+export interface Analysis {
+  peaks: Peak[];
+  candidates: Candidate[];
+  library_version: string;
+  duration_s: number;
+  total_counts: number;
 }
