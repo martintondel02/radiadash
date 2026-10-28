@@ -42,6 +42,10 @@ export async function listDevices(): Promise<DeviceList> {
   return invoke<DeviceList>("list_devices");
 }
 
+export async function setEnergyCalibration(coefficients: [number, number, number]): Promise<void> {
+  return invoke("set_energy_calibration", { coefficients });
+}
+
 export async function resetDose(): Promise<void> {
   return invoke("reset_dose");
 }
@@ -64,6 +68,10 @@ export function onSpectrum(cb: (value: SpectrumPayload) => void): Promise<Unlist
 
 export function onAnalysis(cb: (value: Analysis) => void): Promise<UnlistenFn> {
   return listen<Analysis>("analysis", (event) => cb(event.payload));
+}
+
+export function onCalibration(cb: (value: [number, number, number]) => void): Promise<UnlistenFn> {
+  return listen<[number, number, number]>("calibration", (event) => cb(event.payload));
 }
 
 export function onDeviceError(cb: (message: string) => void): Promise<UnlistenFn> {

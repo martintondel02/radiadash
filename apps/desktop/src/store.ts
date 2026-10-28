@@ -19,6 +19,10 @@ interface AppStore {
   history: Telemetry[];
   spectrum: SpectrumPayload | null;
   analysis: Analysis | null;
+  calibration: [number, number, number] | null;
+  density: "comfortable" | "compact" | "focus";
+  sound: boolean;
+  volume: number;
   series: Series | null;
   startedAt: number | null;
   units: Units;
@@ -29,6 +33,9 @@ interface AppStore {
   disconnect: () => Promise<void>;
   refreshSeries: (rangeSeconds: number) => Promise<void>;
   resetDose: () => Promise<void>;
+  setDensity: (density: "comfortable" | "compact" | "focus") => void;
+  setSound: (sound: boolean) => void;
+  setVolume: (volume: number) => void;
   setDoseRateUnit: (unit: DoseRateUnit) => void;
   setDoseUnit: (unit: DoseUnit) => void;
   setCountUnit: (unit: CountUnit) => void;
@@ -68,6 +75,7 @@ function demoAnalysis(): Analysis {
       line_energy_kev: energy,
       intensity,
       matched: matched && index < 2,
+      peak_channel: matched && index < 2 ? Math.round(energy / 3) : null,
       peak_energy_kev: matched && index < 2 ? energy - 2 : null,
       delta_kev: matched && index < 2 ? -2 : null,
       significance: matched && index < 2 ? 24 : null,
@@ -94,6 +102,10 @@ export const useApp = create<AppStore>((set, get) => ({
   history: [],
   spectrum: null,
   analysis: null,
+  calibration: null,
+  density: (localStorage.getItem("radiadash-density") as "comfortable" | "compact" | "focus") ?? "comfortable",
+  sound: localStorage.getItem("radiadash-sound") === "1",
+  volume: Number(localStorage.getItem("radiadash-volume") ?? "0.35"),
   series: null,
   startedAt: null,
   units: { doseRate: "µSv/h", dose: "µSv", count: "cps" },
@@ -141,6 +153,7 @@ export const useApp = create<AppStore>((set, get) => ({
           startedAt: snapshot.started_at,
           spectrum: snapshot.spectrum ?? get().spectrum,
           latest: snapshot.latest ?? get().latest,
+          calibration: snapshot.calibration ?? get().calibration,
         });
         if (snapshot.status === "connected") {
           void get().refreshSeries(3600);
@@ -148,6 +161,7 @@ export const useApp = create<AppStore>((set, get) => ({
       }),
       ipc.onSpectrum((spectrum) => set({ spectrum })),
       ipc.onAnalysis((analysis) => set({ analysis })),
+      ipc.onCalibration((calibration) => set({ calibration })),
       ipc.onDeviceError((message) => set({ message })),
     ]);
     void unlisten;
@@ -166,6 +180,7 @@ export const useApp = create<AppStore>((set, get) => ({
       if (spectrum) set({ spectrum });
       const analysis = await ipc.getLatestAnalysis();
       if (analysis) set({ analysis });
+      if (snapshot.calibration) set({ calibration: snapshot.calibration });
       if (snapshot.status === "connected") await get().refreshSeries(3600);
     } catch (error) {
       set({ status: "error", message: String(error) });
@@ -209,6 +224,21 @@ export const useApp = create<AppStore>((set, get) => ({
     }
   },
 
+  setDensity: (density) =>
+    set(() => {
+      localStorage.setItem("radiadash-density", density);
+      return { density };
+    }),
+  setSound: (sound) =>
+    set(() => {
+      localStorage.setItem("radiadash-sound", sound ? "1" : "0");
+      return { sound };
+    }),
+  setVolume: (volume) =>
+    set(() => {
+      localStorage.setItem("radiadash-volume", String(volume));
+      return { volume };
+    }),
   setDoseRateUnit: (doseRate) => set((state) => ({ units: { ...state.units, doseRate } })),
   setDoseUnit: (dose) => set((state) => ({ units: { ...state.units, dose } })),
   setCountUnit: (count) => set((state) => ({ units: { ...state.units, count } })),

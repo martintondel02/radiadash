@@ -55,6 +55,7 @@ export interface Snapshot {
   unit_flags: UnitFlags | null;
   spectrum: SpectrumPayload | null;
   analysis: Analysis | null;
+  calibration: [number, number, number] | null;
 }
 
 export interface Series {
@@ -78,6 +79,7 @@ export interface Evidence {
   line_energy_kev: number;
   intensity: number;
   matched: boolean;
+  peak_channel: number | null;
   peak_energy_kev: number | null;
   delta_kev: number | null;
   significance: number | null;

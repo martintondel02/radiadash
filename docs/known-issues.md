@@ -29,8 +29,11 @@ released yet. Tracked here instead of pinning an old Tauri.
 ## Isotope analysis
 
 - The device calibration currently reads K-40 at ~1443 keV instead of 1460.8
-  (−1.2 %) and Tl-208 at 2599 instead of 2614.5. The UI surfaces the median
-  offset; a calibration wizard is planned.
+  (−1.2 %) and Tl-208 at 2599 instead of 2614.5. The Device page can fit a
+  replacement, but the current anchor set gives ~10 keV RMS because some lines
+  are misassigned — do not apply that fit without checking.
+- Drag-and-resize workspaces are not implemented yet; layout density and the
+  per-domain views are the current flexibility mechanism.
 - Below ~95 keV the spectrum is dominated by a detector artefact, so low-energy
   lines are ignored except for Am-241.
 - Candidates are ranked by line coverage and energy agreement only; no

@@ -39,6 +39,7 @@ pub enum Cmd {
     Connect(ConnectRequest),
     Disconnect,
     SetSpectrumInterval(u64),
+    SetCalibration([f32; 3]),
     ResetDose,
 }
 
@@ -109,6 +110,7 @@ pub struct Snapshot {
     pub unit_flags: Option<UnitFlags>,
     pub spectrum: Option<SpectrumPayload>,
     pub analysis: Option<radiadash_core::isotope::Analysis>,
+    pub calibration: Option<[f32; 3]>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -170,6 +172,7 @@ pub async fn run(app: AppHandle, shared: Arc<Shared>, mut rx: mpsc::Receiver<Cmd
             Cmd::Connect(request) => run_connection(&app, &shared, &mut rx, &db, request).await,
             Cmd::Disconnect => {}
             Cmd::SetSpectrumInterval(_) => {}
+            Cmd::SetCalibration(_) => {}
             Cmd::ResetDose => {}
         }
     }
@@ -217,6 +220,7 @@ async fn run_connection(
         }
     };
     let unit_flags = device.read_units().await.ok();
+    let calibration = device.energy_calibration().await.ok();
     let scale = detect_scale(&identity.config);
     let session_id = match with_db(db, |db| db.start_session(&identity.serial, &transport_label)) {
         Ok(id) => id,
@@ -235,6 +239,7 @@ async fn run_connection(
         snapshot.started_at = Some(chrono::Utc::now().timestamp_millis());
         snapshot.dose_scale = Some(scale);
         snapshot.unit_flags = unit_flags;
+        snapshot.calibration = calibration;
         snapshot.spectrum_interval_s = DEFAULT_SPECTRUM_INTERVAL_S;
         emit_connection(app, &snapshot);
     }
@@ -273,6 +278,21 @@ async fn run_connection(
                     spectrum_interval = secs.clamp(3, 600);
                     ticks_until_spectrum = spectrum_interval;
                     shared.snapshot.write().await.spectrum_interval_s = spectrum_interval;
+                }
+                Some(Cmd::SetCalibration(coefficients)) => {
+                    match device.set_energy_calibration(coefficients).await {
+                        Ok(()) => {
+                            let applied = device.energy_calibration().await.ok().unwrap_or(coefficients);
+                            {
+                                let mut snapshot = shared.snapshot.write().await;
+                                snapshot.calibration = Some(applied);
+                            }
+                            let _ = app.emit("calibration", applied);
+                        }
+                        Err(err) => {
+                            let _ = app.emit("device-error", format!("calibration write failed: {err}"));
+                        }
+                    }
                 }
                 Some(Cmd::ResetDose) => {
                     if let Err(err) = device.dose_reset().await {

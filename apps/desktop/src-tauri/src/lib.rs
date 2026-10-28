@@ -75,6 +75,29 @@ async fn set_spectrum_interval(state: State<'_, AppState>, seconds: u64) -> Resu
 }
 
 #[tauri::command]
+async fn set_energy_calibration(
+    state: State<'_, AppState>,
+    coefficients: [f32; 3],
+) -> Result<(), String> {
+    let [a0, a1, a2] = coefficients;
+    let sane = a0.is_finite()
+        && a1.is_finite()
+        && a2.is_finite()
+        && (-100.0..100.0).contains(&a0)
+        && (0.1..20.0).contains(&a1)
+        && a2.abs() < 0.01;
+    if !sane {
+        return Err("refusing to write implausible calibration coefficients".into());
+    }
+    state
+        .shared
+        .tx
+        .send(Cmd::SetCalibration(coefficients))
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
 async fn reset_dose(state: State<'_, AppState>) -> Result<(), String> {
     state
         .shared
@@ -203,6 +226,7 @@ pub fn run() {
             connect_device,
             disconnect_device,
             set_spectrum_interval,
+            set_energy_calibration,
             reset_dose,
             get_snapshot,
             get_series,

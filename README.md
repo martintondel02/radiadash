@@ -3,10 +3,11 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
-> Status: **M3** — live dashboard plus isotope candidate ranking with an energy
-> fingerprint overlay, tested on a real RC-110 over BLE and USB.
+> Status: **M4** — live dashboard, isotope candidates, calibration wizard, Geiger
+> audio, distributions and three layout densities. Tested on a real RC-110 over
+> BLE and USB.
 
-![Radiadash spectrum and isotope candidates](docs/screenshot-m3.png)
+![Calibration wizard on the Device page](docs/screenshot-m4.png)
 
 ## Why
 
@@ -31,6 +32,11 @@ Radiadash aims to be a fast, local-first desktop console:
 - Spectrum read every 60 s, stored and rendered with the device calibration
 - Isotope candidates (35 nuclides, 100 lines) with confidence bands, a per-line
   evidence table, a library-line fingerprint overlay and a calibration hint
+- Calibration wizard: robust fit of a0/a1/a2 from identified peaks, RMS guard,
+  explicit confirmation before writing to the device
+- Geiger audio generated from the measured CPS (Poisson-jittered clicks)
+- Distributions: CPS and dose-rate histograms, ranges from 5 minutes to 24 hours
+- Layout density: comfortable, compact or focus
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
 
@@ -88,7 +94,7 @@ apps/desktop            Tauri v2 shell + React/TypeScript UI
 ```
 
 See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md) and
-[docs/isotopes.md](docs/isotopes.md).
+[docs/isotopes.md](docs/isotopes.md) and [docs/calibration.md](docs/calibration.md).
 
 ## Roadmap
 
@@ -98,7 +104,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protoc
 | M1 ✅ | Protocol core, USB + BLE, probe CLI, simulator, tests |
 | M2 ✅ | Live dashboard, SQLite sessions, units, auto-connect |
 | M3 ✅ | Spectrum analysis, isotope library, fingerprint overlay, evidence UI |
-| M4 | Workspaces, ranges, distributions, Geiger audio |
+| M4 ✅ | Calibration wizard, distributions, Geiger audio, layout density |
 | M5 | Geotagging, map view, `.rctrk`/GPX import, exports |
 | M6 | Device settings, packaging, docs, release |
 

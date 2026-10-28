@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   COUNT_UNITS,
   DOSE_RATE_UNITS,
@@ -13,6 +13,7 @@ import {
 } from "./lib/units";
 import type { Candidate, SpectrumPayload, Telemetry } from "./lib/types";
 import { useApp } from "./store";
+import { setEnergyCalibration } from "./lib/ipc";
 
 type NavKey = "overview" | "spectrum" | "rate" | "map" | "history" | "device";
 
@@ -277,8 +278,306 @@ function ConnectionPanel() {
   );
 }
 
+function useGeiger(cps: number, enabled: boolean, volume: number) {
+  const cpsRef = useRef(cps);
+  const volumeRef = useRef(volume);
+  cpsRef.current = cps;
+  volumeRef.current = volume;
+
+  useEffect(() => {
+    if (!enabled) return;
+    const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtor) return;
+    const context = new AudioCtor();
+    const buffer = context.createBuffer(1, Math.floor(context.sampleRate * 0.004), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+
+    const timer = window.setInterval(() => {
+      const expected = Math.min(cpsRef.current, 500) * 0.08;
+      let clicks = Math.floor(expected);
+      if (Math.random() < expected - clicks) clicks += 1;
+      clicks = Math.min(clicks, 6);
+      for (let i = 0; i < clicks; i += 1) {
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        const gain = context.createGain();
+        const level = volumeRef.current * (0.6 + Math.random() * 0.4);
+        gain.gain.setValueAtTime(level, context.currentTime + Math.random() * 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.03);
+        source.connect(gain).connect(context.destination);
+        source.start(context.currentTime + Math.random() * 0.02);
+      }
+    }, 80);
+
+    return () => {
+      window.clearInterval(timer);
+      void context.close();
+    };
+  }, [enabled]);
+}
+
+function Histogram({ values, height = 120, unit }: { values: number[]; height?: number; unit?: string }) {
+  const { bins, mean, sigma, min, max } = useMemo(() => {
+    if (values.length === 0) return { bins: [] as number[], mean: 0, sigma: 0, min: 0, max: 0 };
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const sigma = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length);
+    const count = 24;
+    const span = max - min || 1;
+    const bins = new Array(count).fill(0);
+    for (const value of values) {
+      const index = Math.min(count - 1, Math.floor(((value - min) / span) * count));
+      bins[index] += 1;
+    }
+    return { bins, mean, sigma, min, max };
+  }, [values]);
+
+  if (bins.length === 0) return <p className="text-xs text-[var(--muted)]">no samples yet</p>;
+  const peak = Math.max(...bins, 1);
+
+  return (
+    <div>
+      <svg viewBox="0 0 240 80" className="w-full" style={{ height }} preserveAspectRatio="none" aria-hidden="true">
+        {bins.map((count, index) => (
+          <rect
+            key={index}
+            x={index * 10}
+            y={80 - (count / peak) * 76}
+            width={9}
+            height={(count / peak) * 76}
+            fill="var(--accent)"
+            opacity={0.7}
+          />
+        ))}
+      </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
+        <span className="num">{min.toFixed(2)} {unit}</span>
+        <span className="num">μ {mean.toFixed(2)} · σ {sigma.toFixed(2)}</span>
+        <span className="num">{max.toFixed(2)} {unit}</span>
+      </div>
+    </div>
+  );
+}
+
+interface CalibrationPoint {
+  channel: number;
+  energy: number;
+  isotope: string;
+  intensity: number;
+}
+
+function calibrationPoints(analysis: ReturnType<typeof useApp.getState>["analysis"]): CalibrationPoint[] {
+  if (!analysis) return [];
+  const byChannel = new Map<number, CalibrationPoint>();
+  for (const candidate of analysis.candidates) {
+    for (const evidence of candidate.evidence) {
+      if (!evidence.matched || evidence.peak_channel == null) continue;
+      if (evidence.intensity < 10) continue;
+      if (Math.abs(evidence.delta_kev ?? 999) > 60) continue;
+      const point: CalibrationPoint = {
+        channel: evidence.peak_channel,
+        energy: evidence.line_energy_kev,
+        isotope: candidate.id,
+        intensity: evidence.intensity,
+      };
+      const existing = byChannel.get(point.channel);
+      if (!existing || existing.intensity < point.intensity) byChannel.set(point.channel, point);
+    }
+  }
+  return [...byChannel.values()].sort((a, b) => a.channel - b.channel);
+}
+
+function solve(matrix: number[][], vector: number[]): number[] | null {
+  const n = vector.length;
+  const a = matrix.map((row, index) => [...row, vector[index]]);
+  for (let column = 0; column < n; column += 1) {
+    let pivot = column;
+    for (let row = column + 1; row < n; row += 1) {
+      if (Math.abs(a[row][column]) > Math.abs(a[pivot][column])) pivot = row;
+    }
+    if (Math.abs(a[pivot][column]) < 1e-12) return null;
+    [a[column], a[pivot]] = [a[pivot], a[column]];
+    for (let row = 0; row < n; row += 1) {
+      if (row === column) continue;
+      const factor = a[row][column] / a[column][column];
+      for (let k = column; k <= n; k += 1) a[row][k] -= factor * a[column][k];
+    }
+  }
+  return a.map((row, index) => row[n] / row[index]);
+}
+
+function fitCalibration(points: CalibrationPoint[], quadratic: boolean): [number, number, number] | null {
+  if (points.length < 2) return null;
+  const terms = quadratic && points.length >= 3 ? 3 : 2;
+  const ata = Array.from({ length: terms }, () => new Array(terms).fill(0));
+  const atb = new Array(terms).fill(0);
+  for (const point of points) {
+    const x = point.channel;
+    const basis = terms === 3 ? [1, x, x * x] : [1, x];
+    for (let i = 0; i < terms; i += 1) {
+      atb[i] += basis[i] * point.energy;
+      for (let j = 0; j < terms; j += 1) ata[i][j] += basis[i] * basis[j];
+    }
+  }
+  const solved = solve(ata, atb);
+  if (!solved) return null;
+  return [solved[0], solved[1], terms === 3 ? solved[2] : 0];
+}
+
+function fitRobust(points: CalibrationPoint[]): { fit: [number, number, number]; inliers: CalibrationPoint[] } | null {
+  let inliers = points;
+  let fit = fitCalibration(inliers, inliers.length >= 4);
+  if (!fit) return null;
+
+  for (let iteration = 0; iteration < 3; iteration += 1) {
+    const residuals = inliers.map((point) => fit![0] + fit![1] * point.channel + fit![2] * point.channel * point.channel - point.energy);
+    const sorted = [...residuals].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+    const mad = sorted.map((value) => Math.abs(value - median)).sort((a, b) => a - b)[Math.floor(sorted.length / 2)] ?? 0;
+    const threshold = Math.max(4, 3 * 1.4826 * mad);
+    const next = inliers.filter((_, index) => Math.abs(residuals[index]) <= threshold);
+    if (next.length < 2 || next.length === inliers.length) break;
+    const refit = fitCalibration(next, next.length >= 4);
+    if (!refit) break;
+    inliers = next;
+    fit = refit;
+  }
+  return fit ? { fit, inliers } : null;
+}
+
+function CalibrationCard() {
+  const { analysis, calibration } = useApp();
+  const [fit, setFit] = useState<[number, number, number] | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [points, setPoints] = useState<CalibrationPoint[]>([]);
+  const [excluded, setExcluded] = useState(0);
+  const [rms, setRms] = useState(0);
+
+  const current = calibration;
+
+  const runFit = () => {
+    const collected = calibrationPoints(analysis);
+    setPoints(collected);
+    if (collected.length < 2) {
+      setFit(null);
+      setMessage("Need at least two identified peaks (e.g. K-40 and Tl-208/Bi-214). Collect more spectrum first.");
+      return;
+    }
+    const result = fitRobust(collected);
+    setFit(result?.fit ?? null);
+    setExcluded(result ? collected.length - result.inliers.length : 0);
+    if (result) setPoints(result.inliers);
+    setMessage(result ? null : "Fit failed — points are degenerate.");
+    if (result) {
+      const residuals = result.inliers.map(
+        (point) => result.fit[0] + result.fit[1] * point.channel + result.fit[2] * point.channel * point.channel - point.energy,
+      );
+      setRms(Math.sqrt(residuals.reduce((a, b) => a + b * b, 0) / residuals.length));
+    } else {
+      setRms(0);
+    }
+  };
+
+  const apply = async () => {
+    if (!fit) return;
+    const text = `Write calibration to the device?
+
+a0=${fit[0].toFixed(4)}  a1=${fit[1].toFixed(6)}  a2=${fit[2].toExponential(3)}
+
+This replaces the factory calibration. You can restore it from a backup if you recorded the old values.`;
+    if (!window.confirm(text)) return;
+    try {
+      await setEnergyCalibration(fit);
+      setMessage("Calibration written. New spectra will use it.");
+    } catch (error) {
+      setMessage(String(error));
+    }
+  };
+
+  const residual = (coefficients: [number, number, number], channel: number, target: number) =>
+    coefficients[0] + coefficients[1] * channel + coefficients[2] * channel * channel - target;
+
+  return (
+    <Card title="Energy calibration">
+      {current ? (
+        <div className="num text-[11px] text-[var(--muted)]">
+          a0={current[0].toFixed(4)} · a1={current[1].toFixed(6)} · a2={current[2].toExponential(3)}
+        </div>
+      ) : (
+        <p className="text-[11px] text-[var(--muted)]">Not connected.</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={runFit}
+          className="rounded border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+        >
+          Fit from identified peaks
+        </button>
+        <button
+          onClick={() => void apply()}
+          disabled={!fit || rms > 12}
+          className="rounded border border-[var(--accent-dim)] px-2 py-1 text-[11px] text-[var(--accent)] disabled:opacity-40"
+        >
+          Apply to device
+        </button>
+      </div>
+
+      {points.length > 0 && (
+        <table className="mt-3 w-full text-[10px]">
+          <thead>
+            <tr className="text-left text-[var(--muted)]">
+              <th className="font-normal">Isotope</th>
+              <th className="text-right font-normal">Channel</th>
+              <th className="text-right font-normal">Line</th>
+              <th className="text-right font-normal">Fit Δ</th>
+            </tr>
+          </thead>
+          <tbody className="num">
+            {points.map((point) => (
+              <tr key={point.channel}>
+                <td>{point.isotope}</td>
+                <td className="text-right">{point.channel}</td>
+                <td className="text-right">{point.energy.toFixed(1)}</td>
+                <td className="text-right">
+                  {fit ? `${residual(fit, point.channel, point.energy).toFixed(1)} keV` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {fit && (
+        <p className={`mt-2 text-[10px] ${rms > 8 ? "text-[var(--amber)]" : "text-[var(--muted)]"}`}>
+          Fit RMS {rms.toFixed(1)} keV over {points.length} anchors{rms > 8 ? " — poor agreement, check peak identities" : ""}.
+        </p>
+      )}
+      {excluded > 0 && (
+        <p className="mt-2 text-[10px] text-[var(--muted)]">
+          {excluded} point{excluded === 1 ? "" : "s"} rejected as outliers (residual &gt; 3×MAD).
+        </p>
+      )}
+      {message && <p className="mt-2 text-[10px] leading-relaxed text-[var(--amber)]">{message}</p>}
+      <p className="mt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+        Fits a0/a1 (and a2 with three or more anchors) to the identified peaks. Only use this if the peaks are
+        confidently identified; a bad calibration is worse than a slightly offset one.
+      </p>
+    </Card>
+  );
+}
+
 function Overview({ now }: { now: number }) {
-  const { latest, history, spectrum, identity, units, startedAt, analysis } = useApp();
+  const { latest, history, spectrum, identity, units, startedAt, analysis, density } = useApp();
+  const wide = density === "comfortable" ? "lg:col-span-2" : "";
+  const grid =
+    density === "compact"
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      : density === "focus"
+        ? "grid grid-cols-1 gap-4"
+        : "grid grid-cols-1 gap-4 lg:grid-cols-3";
   const candidates = analysis?.candidates ?? [];
   const cpsValues = history.slice(-360).map((t) => t.cps);
 
@@ -290,10 +589,10 @@ function Overview({ now }: { now: number }) {
   const cpsDisplay = cps === null ? null : formatValue(cps);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div className={grid}>
       <Card
         title="Count rate"
-        className="lg:col-span-2"
+        className={wide}
         action={<span className="num text-[11px] text-[var(--muted)]">last {cpsValues.length} s</span>}
       >
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -599,6 +898,14 @@ function RateView({ now }: { now: number }) {
       <Card title="Dose rate series">
         <Sparkline data={(series?.dose_rate_usvh ?? history.map((t) => t.dose_rate_usvh)).slice(-600)} />
       </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="CPS distribution">
+          <Histogram values={history.slice(-600).map((t) => t.cps)} unit={units.count} />
+        </Card>
+        <Card title="Dose rate distribution">
+          <Histogram values={history.slice(-600).map((t) => t.dose_rate_usvh)} unit="µSv/h" />
+        </Card>
+      </div>
     </div>
   );
 }
@@ -615,7 +922,24 @@ function Placeholder({ title, milestone, body }: { title: string; milestone: str
 }
 
 export default function App() {
-  const { theme, toggleTheme, units, setDoseRateUnit, setDoseUnit, setCountUnit, status, init } = useApp();
+  const {
+    theme,
+    toggleTheme,
+    units,
+    setDoseRateUnit,
+    setDoseUnit,
+    setCountUnit,
+    status,
+    init,
+    density,
+    setDensity,
+    sound,
+    setSound,
+    volume,
+    setVolume,
+    latest,
+  } = useApp();
+  useGeiger(latest?.cps ?? 0, sound, volume);
   const [nav, setNav] = useState<NavKey>("overview");
   const [now, setNow] = useState(Date.now());
 
@@ -708,6 +1032,25 @@ export default function App() {
                 <option key={unit}>{unit}</option>
               ))}
             </select>
+            <select
+              value={density}
+              onChange={(event) => setDensity(event.target.value as "comfortable" | "compact" | "focus")}
+              className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1.5 text-xs"
+              aria-label="Layout density"
+            >
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+              <option value="focus">Focus</option>
+            </select>
+            <button
+              onClick={() => setSound(!sound)}
+              className={`rounded-md border px-2.5 py-1.5 text-xs ${
+                sound ? "border-[var(--accent-dim)] text-[var(--accent)]" : "border-[var(--border)] text-[var(--muted)]"
+              }`}
+              aria-pressed={sound}
+            >
+              {sound ? "Sound" : "Muted"}
+            </button>
             <button
               onClick={toggleTheme}
               className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
@@ -733,11 +1076,35 @@ export default function App() {
               <Card title="Device">
                 <DeviceDetails />
               </Card>
-              <Placeholder title="Settings" milestone="M6" body="Brightness, sound, alarms and calibration editing land in M6." />
+              <CalibrationCard />
+              <Card title="Geiger audio">
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={sound} onChange={(event) => setSound(event.target.checked)} />
+                  Click audio from measured count rate
+                </label>
+                <div className="mt-3 flex items-center gap-3">
+                  <span className="text-[11px] text-[var(--muted)]">Volume</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={volume}
+                    onChange={(event) => setVolume(Number(event.target.value))}
+                    className="flex-1"
+                    aria-label="Geiger volume"
+                  />
+                  <span className="num text-[11px] text-[var(--muted)]">{Math.round(volume * 100)}%</span>
+                </div>
+                <p className="mt-2 text-[10px] leading-relaxed text-[var(--muted)]">
+                  Clicks are generated from the measured CPS with Poisson jitter — the audio is a sonification, not an
+                  independent measurement.
+                </p>
+              </Card>
             </div>
           )}
           <p className="mt-6 text-center text-[10px] text-[var(--muted)]">
-            M3 · live data over BLE/USB · isotope candidates from the local library · no cloud
+            M4 · live data · isotope candidates · calibration wizard · Geiger audio · no cloud
           </p>
         </div>
       </main>
