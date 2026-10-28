@@ -3,11 +3,11 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
-> Status: **M4** — live dashboard, isotope candidates, calibration wizard, Geiger
-> audio, distributions and three layout densities. Tested on a real RC-110 over
-> BLE and USB.
+> Status: **M5** — live dashboard, isotope candidates, calibration wizard, Geiger
+> audio, distributions, layout densities and a survey map fed by `.rctrk`/GPX
+> imports. Tested on a real RC-110 over BLE and USB.
 
-![Calibration wizard on the Device page](docs/screenshot-m4.png)
+![Survey track coloured by dose rate](docs/screenshot-m5.png)
 
 ## Why
 
@@ -39,6 +39,8 @@ Radiadash aims to be a fast, local-first desktop console:
 - Zoomable charts: scroll wheel or trackpad, drag to pan, +/− buttons and reset;
   colour-coded spectrum bars and category colours for isotope candidates
 - Layout density: comfortable, compact or focus
+- Survey map: import `.rctrk` (Radiacode phone app) or GPX tracks, points coloured
+  by dose rate, popup details, zoom/pan
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
 
@@ -96,7 +98,8 @@ apps/desktop            Tauri v2 shell + React/TypeScript UI
 ```
 
 See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protocol.md) and
-[docs/isotopes.md](docs/isotopes.md) and [docs/calibration.md](docs/calibration.md).
+[docs/isotopes.md](docs/isotopes.md), [docs/calibration.md](docs/calibration.md) and
+[docs/map.md](docs/map.md).
 
 ## Roadmap
 
@@ -107,7 +110,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protoc
 | M2 ✅ | Live dashboard, SQLite sessions, units, auto-connect |
 | M3 ✅ | Spectrum analysis, isotope library, fingerprint overlay, evidence UI |
 | M4 ✅ | Calibration wizard, distributions, Geiger audio, layout density |
-| M5 | Geotagging, map view, `.rctrk`/GPX import, exports |
+| M5 ✅ | Map view, `.rctrk`/GPX import, dose-coloured track (live geotagging pending) |
 | M6 | Device settings, packaging, docs, release |
 
 ## Credits and licence

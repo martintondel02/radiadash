@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import * as ipc from "./lib/ipc";
-import type { Analysis, Series, Snapshot, SpectrumPayload, Telemetry } from "./lib/types";
+import type { Analysis, Series, Snapshot, SpectrumPayload, Telemetry, TrackPoint } from "./lib/types";
 import type { CountUnit, DoseRateUnit, DoseUnit } from "./lib/units";
 
 const HISTORY_LIMIT = 900;
@@ -19,6 +19,7 @@ interface AppStore {
   history: Telemetry[];
   spectrum: SpectrumPayload | null;
   analysis: Analysis | null;
+  track: TrackPoint[];
   calibration: [number, number, number] | null;
   density: "comfortable" | "compact" | "focus";
   sound: boolean;
@@ -33,6 +34,9 @@ interface AppStore {
   disconnect: () => Promise<void>;
   refreshSeries: (rangeSeconds: number) => Promise<void>;
   resetDose: () => Promise<void>;
+  loadTrack: () => Promise<void>;
+  importTrack: (text: string, format: "rctrk" | "gpx", source?: string) => Promise<number>;
+  clearTrack: () => Promise<void>;
   setDensity: (density: "comfortable" | "compact" | "focus") => void;
   setSound: (sound: boolean) => void;
   setVolume: (volume: number) => void;
@@ -102,6 +106,7 @@ export const useApp = create<AppStore>((set, get) => ({
   history: [],
   spectrum: null,
   analysis: null,
+  track: [],
   calibration: null,
   density: (localStorage.getItem("radiadash-density") as "comfortable" | "compact" | "focus") ?? "comfortable",
   sound: localStorage.getItem("radiadash-sound") === "1",
@@ -222,6 +227,26 @@ export const useApp = create<AppStore>((set, get) => ({
     } catch (error) {
       set({ message: String(error) });
     }
+  },
+
+  loadTrack: async () => {
+    if (!ipc.isDesktop) return;
+    try {
+      set({ track: await ipc.getTrack() });
+    } catch (error) {
+      set({ message: String(error) });
+    }
+  },
+
+  importTrack: async (text, format, source) => {
+    const count = await ipc.importTrack(text, format, source);
+    await get().loadTrack();
+    return count;
+  },
+
+  clearTrack: async () => {
+    await ipc.clearTrack();
+    set({ track: [] });
   },
 
   setDensity: (density) =>

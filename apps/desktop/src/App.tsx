@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import {
   COUNT_UNITS,
   DOSE_RATE_UNITS,
@@ -15,6 +15,8 @@ import type { Candidate, Telemetry } from "./lib/types";
 import { useApp } from "./store";
 import { setEnergyCalibration } from "./lib/ipc";
 import { Histogram, SpectrumChart, TimeSeriesChart } from "./components/charts";
+
+const MapView = lazy(() => import("./components/MapView"));
 
 type NavKey = "overview" | "spectrum" | "rate" | "map" | "history" | "device";
 
@@ -956,7 +958,9 @@ export default function App() {
           {nav === "spectrum" && <SpectrumView />}
           {nav === "rate" && <RateView now={now} />}
           {nav === "map" && (
-            <Placeholder title="Map" milestone="M5" body="Geotag surveys from manual pins, gpsd, GPX or .rctrk imports." />
+            <Suspense fallback={<div className="panel p-6 text-xs text-[var(--muted)]">Loading map…</div>}>
+              <MapView />
+            </Suspense>
           )}
           {nav === "history" && (
             <Placeholder title="History" milestone="M2 storage / M6 export" body="Sessions are stored in SQLite; browsing and export arrive next." />
@@ -994,7 +998,7 @@ export default function App() {
             </div>
           )}
           <p className="mt-6 text-center text-[10px] text-[var(--muted)]">
-            M4 · live data · isotope candidates · calibration wizard · Geiger audio · no cloud
+            M5 · live data · isotope candidates · calibration wizard · survey map · no cloud
           </p>
         </div>
       </main>

@@ -2,6 +2,7 @@
 
 mod manager;
 mod store;
+mod track;
 
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use serde::Serialize;
 use store::{Db, Series};
 use tauri::{Manager, State};
 use tokio::sync::{mpsc, RwLock};
+use track::TrackPoint;
 
 struct AppState {
     shared: Arc<Shared>,
@@ -75,10 +77,7 @@ async fn set_spectrum_interval(state: State<'_, AppState>, seconds: u64) -> Resu
 }
 
 #[tauri::command]
-async fn set_energy_calibration(
-    state: State<'_, AppState>,
-    coefficients: [f32; 3],
-) -> Result<(), String> {
+async fn set_energy_calibration(state: State<'_, AppState>, coefficients: [f32; 3]) -> Result<(), String> {
     let [a0, a1, a2] = coefficients;
     let sane = a0.is_finite()
         && a1.is_finite()
@@ -165,6 +164,36 @@ async fn get_latest_analysis(state: State<'_, AppState>) -> Result<Option<Analys
 }
 
 #[tauri::command]
+async fn import_track(
+    state: State<'_, AppState>,
+    text: String,
+    format: String,
+    source: Option<String>,
+) -> Result<usize, String> {
+    let source = source.unwrap_or_else(|| "import".into());
+    let points = match format.as_str() {
+        "gpx" => track::parse_gpx(&text, &source),
+        _ => track::parse_rctrk(&text, &source),
+    }
+    .map_err(|e| format!("parse failed: {e}"))?;
+
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    db.insert_track(&points).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_track(state: State<'_, AppState>) -> Result<Vec<TrackPoint>, String> {
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    db.track().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn clear_track(state: State<'_, AppState>) -> Result<(), String> {
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    db.clear_track().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn list_devices() -> Result<DeviceList, String> {
     let usb = radiadash_core::usb::list().await.map_err(|e| e.to_string())?;
     let ble = radiadash_core::ble::scan(4)
@@ -232,6 +261,9 @@ pub fn run() {
             get_series,
             get_latest_spectrum,
             get_latest_analysis,
+            import_track,
+            get_track,
+            clear_track,
             list_devices
         ])
         .run(tauri::generate_context!())

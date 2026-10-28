@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS spectra (
 );
 CREATE INDEX IF NOT EXISTS spectra_ts ON spectra(ts);
 
+CREATE TABLE IF NOT EXISTS track_points (
+    id             INTEGER PRIMARY KEY,
+    imported_at    INTEGER NOT NULL,
+    ts             INTEGER NOT NULL,
+    lat            REAL NOT NULL,
+    lon            REAL NOT NULL,
+    dose_rate_usvh REAL,
+    cps            REAL,
+    source         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS track_points_ts ON track_points(ts);
+
 CREATE TABLE IF NOT EXISTS events (
     id         INTEGER PRIMARY KEY,
     session_id INTEGER,
@@ -196,6 +208,54 @@ impl Db {
                 blob
             ],
         )?;
+        Ok(())
+    }
+
+    pub fn insert_track(&self, points: &[crate::track::TrackPoint]) -> Result<usize> {
+        let imported_at = chrono::Utc::now().timestamp_millis();
+        let tx = self.conn.unchecked_transaction()?;
+        {
+            let mut statement = tx.prepare(
+                "INSERT INTO track_points (imported_at, ts, lat, lon, dose_rate_usvh, cps, source)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            )?;
+            for point in points {
+                statement.execute(params![
+                    imported_at,
+                    point.ts,
+                    point.lat,
+                    point.lon,
+                    point.dose_rate_usvh,
+                    point.cps,
+                    point.source
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(points.len())
+    }
+
+    pub fn track(&self) -> Result<Vec<crate::track::TrackPoint>> {
+        let mut statement = self
+            .conn
+            .prepare("SELECT ts, lat, lon, dose_rate_usvh, cps, source FROM track_points ORDER BY ts ASC")?;
+        let mut rows = statement.query([])?;
+        let mut points = Vec::new();
+        while let Some(row) = rows.next()? {
+            points.push(crate::track::TrackPoint {
+                ts: row.get(0)?,
+                lat: row.get(1)?,
+                lon: row.get(2)?,
+                dose_rate_usvh: row.get(3)?,
+                cps: row.get(4)?,
+                source: row.get(5)?,
+            });
+        }
+        Ok(points)
+    }
+
+    pub fn clear_track(&self) -> Result<()> {
+        self.conn.execute("DELETE FROM track_points", [])?;
         Ok(())
     }
 

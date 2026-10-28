@@ -105,3 +105,12 @@ export interface Analysis {
   duration_s: number;
   total_counts: number;
 }
+
+export interface TrackPoint {
+  ts: number;
+  lat: number;
+  lon: number;
+  dose_rate_usvh: number | null;
+  cps: number | null;
+  source: string;
+}
