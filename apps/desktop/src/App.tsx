@@ -11,9 +11,10 @@ import {
   type DoseRateUnit,
   type DoseUnit,
 } from "./lib/units";
-import type { Candidate, SpectrumPayload, Telemetry } from "./lib/types";
+import type { Candidate, Telemetry } from "./lib/types";
 import { useApp } from "./store";
 import { setEnergyCalibration } from "./lib/ipc";
+import { Histogram, SpectrumChart, TimeSeriesChart } from "./components/charts";
 
 type NavKey = "overview" | "spectrum" | "rate" | "map" | "history" | "device";
 
@@ -35,114 +36,6 @@ function Logo() {
       <path d="M6.04 10.25A11.5 11.5 0 0 0 6.7 25" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.75" />
       <path d="M25.3 25a11.5 11.5 0 0 0 .66-14.75" stroke="var(--accent)" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.45" />
     </svg>
-  );
-}
-
-function Sparkline({ data }: { data: number[] }) {
-  const path = useMemo(() => {
-    if (data.length < 2) return "";
-    const width = 600;
-    const height = 120;
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const span = max - min || 1;
-    return data
-      .map((value, index) => {
-        const x = (index / (data.length - 1)) * width;
-        const y = height - ((value - min) / span) * (height - 8) - 4;
-        return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [data]);
-
-  if (!path) {
-    return <div className="flex h-28 items-center justify-center text-xs text-[var(--muted)]">waiting for samples…</div>;
-  }
-
-  return (
-    <svg viewBox="0 0 600 120" className="h-28 w-full" preserveAspectRatio="none" aria-hidden="true">
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function energyOf(spectrum: SpectrumPayload, channel: number) {
-  return spectrum.a0 + spectrum.a1 * channel + spectrum.a2 * channel * channel;
-}
-
-function channelForEnergy(spectrum: SpectrumPayload, energyKeV: number) {
-  const { a0, a1, a2 } = spectrum;
-  if (Math.abs(a2) < 1e-9) return (energyKeV - a0) / a1;
-  const disc = a1 * a1 - 4 * a2 * (a0 - energyKeV);
-  if (disc < 0) return Number.NaN;
-  const root = Math.sqrt(disc);
-  const first = (-a1 + root) / (2 * a2);
-  const second = (-a1 - root) / (2 * a2);
-  return first > 0 && first < spectrum.counts.length ? first : second;
-}
-
-function SpectrumChart({
-  spectrum,
-  height = 180,
-  overlay,
-}: {
-  spectrum: SpectrumPayload | null;
-  height?: number;
-  overlay?: { lines: { energy: number; matched: boolean }[] };
-}) {
-  const bars = useMemo(() => {
-    if (!spectrum) return [] as number[];
-    const counts = spectrum.counts;
-    const max = Math.max(...counts, 1);
-    return counts.map((value) => Math.log10(1 + value) / Math.log10(1 + max));
-  }, [spectrum]);
-
-  if (!spectrum || bars.length === 0) {
-    return <div className="flex h-44 items-center justify-center text-xs text-[var(--muted)]">no spectrum yet</div>;
-  }
-
-  const width = 1024;
-  return (
-    <div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" aria-hidden="true">
-        {bars.map((value, index) => (
-          <rect
-            key={index}
-            x={index}
-            y={height - value * (height - 4)}
-            width={1.02}
-            height={value * (height - 4)}
-            fill="var(--accent)"
-            opacity={0.7}
-          />
-        ))}
-        {overlay?.lines.map((line, index) => {
-          const channel = channelForEnergy(spectrum, line.energy);
-          if (!Number.isFinite(channel) || channel < 0 || channel >= spectrum.counts.length) return null;
-          const x = (channel / (spectrum.counts.length - 1)) * width;
-          return (
-            <g key={`${line.energy}-${index}`}>
-              <line
-                x1={x}
-                y1={2}
-                x2={x}
-                y2={height * (line.matched ? 0.55 : 0.38)}
-                stroke={line.matched ? "var(--amber)" : "var(--muted)"}
-                strokeWidth={line.matched ? 1.4 : 0.8}
-                strokeDasharray={line.matched ? undefined : "2 2"}
-                opacity={line.matched ? 0.95 : 0.55}
-              />
-            </g>
-          );
-        })}
-        <line x1="0" y1={height - 0.5} x2={width} y2={height - 0.5} stroke="var(--border)" strokeWidth="0.6" />
-      </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
-        <span>0 keV</span>
-        <span>{Math.round(energyOf(spectrum, 512))} keV</span>
-        <span>{Math.round(energyOf(spectrum, spectrum.counts.length - 1))} keV</span>
-      </div>
-    </div>
   );
 }
 
@@ -179,6 +72,19 @@ function Stat({ label, value, unit, sub }: { label: string; value: string; unit:
       {sub && <div className="mt-1 text-[11px] text-[var(--muted)]">{sub}</div>}
     </div>
   );
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  norm: "#4fd1c5",
+  medical: "#7dd3fc",
+  industrial: "#f0b429",
+  fallout: "#fca5a5",
+  calibration: "#c4b5fd",
+  activation: "#fdba74",
+};
+
+function categoryColor(category: string) {
+  return CATEGORY_COLORS[category] ?? "var(--muted)";
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -315,50 +221,6 @@ function useGeiger(cps: number, enabled: boolean, volume: number) {
       void context.close();
     };
   }, [enabled]);
-}
-
-function Histogram({ values, height = 120, unit }: { values: number[]; height?: number; unit?: string }) {
-  const { bins, mean, sigma, min, max } = useMemo(() => {
-    if (values.length === 0) return { bins: [] as number[], mean: 0, sigma: 0, min: 0, max: 0 };
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const sigma = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length);
-    const count = 24;
-    const span = max - min || 1;
-    const bins = new Array(count).fill(0);
-    for (const value of values) {
-      const index = Math.min(count - 1, Math.floor(((value - min) / span) * count));
-      bins[index] += 1;
-    }
-    return { bins, mean, sigma, min, max };
-  }, [values]);
-
-  if (bins.length === 0) return <p className="text-xs text-[var(--muted)]">no samples yet</p>;
-  const peak = Math.max(...bins, 1);
-
-  return (
-    <div>
-      <svg viewBox="0 0 240 80" className="w-full" style={{ height }} preserveAspectRatio="none" aria-hidden="true">
-        {bins.map((count, index) => (
-          <rect
-            key={index}
-            x={index * 10}
-            y={80 - (count / peak) * 76}
-            width={9}
-            height={(count / peak) * 76}
-            fill="var(--accent)"
-            opacity={0.7}
-          />
-        ))}
-      </svg>
-      <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
-        <span className="num">{min.toFixed(2)} {unit}</span>
-        <span className="num">μ {mean.toFixed(2)} · σ {sigma.toFixed(2)}</span>
-        <span className="num">{max.toFixed(2)} {unit}</span>
-      </div>
-    </div>
-  );
 }
 
 interface CalibrationPoint {
@@ -608,7 +470,12 @@ function Overview({ now }: { now: number }) {
           </div>
         </div>
         <div className="mt-3">
-          <Sparkline data={cpsValues} />
+          <TimeSeriesChart
+            values={cpsValues}
+            times={history.slice(-360).map((sample) => sample.ts)}
+            unit={units.count}
+            height={130}
+          />
         </div>
       </Card>
 
@@ -623,8 +490,16 @@ function Overview({ now }: { now: number }) {
         />
         <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--panel-2)]">
           <div
-            className="h-full rounded-full bg-[var(--accent)]"
-            style={{ width: `${Math.min(100, ((latest?.dose_rate_usvh ?? 0) / 5) * 100)}%` }}
+            className="h-full rounded-full"
+            style={{
+              width: `${Math.min(100, ((latest?.dose_rate_usvh ?? 0) / 5) * 100)}%`,
+              background:
+                (latest?.dose_rate_usvh ?? 0) > 3.75
+                  ? "var(--danger)"
+                  : (latest?.dose_rate_usvh ?? 0) > 2
+                    ? "var(--amber)"
+                    : "linear-gradient(90deg, var(--accent-dim), var(--accent))",
+            }}
           />
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
@@ -634,7 +509,7 @@ function Overview({ now }: { now: number }) {
       </Card>
 
       <Card title="Spectrum · 1024 ch">
-        <SpectrumChart spectrum={spectrum} height={130} />
+        <SpectrumChart spectrum={spectrum} height={130} compact />
         <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--muted)]">
           <span>{spectrum ? `${spectrum.counts.reduce((a, b) => a + b, 0).toLocaleString()} counts` : "—"}</span>
           <span>{spectrum ? `${spectrum.duration_s.toLocaleString()} s live` : ""}</span>
@@ -691,6 +566,7 @@ function Overview({ now }: { now: number }) {
             {candidates.slice(0, 4).map((candidate) => (
               <div key={candidate.id} className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
                 <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: categoryColor(candidate.category) }} />
                   <span className="num text-sm font-medium">{candidate.id}</span>
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${confidenceClass(candidate.confidence)}`}>
                     {candidate.confidence}
@@ -779,7 +655,10 @@ function SpectrumView() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="num text-sm">{candidate.id}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: categoryColor(candidate.category) }} />
+                    <span className="num text-sm">{candidate.id}</span>
+                  </span>
                   <span className={`rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${confidenceClass(candidate.confidence)}`}>
                     {candidate.confidence}
                   </span>
@@ -888,7 +767,12 @@ function RateView({ now }: { now: number }) {
           </div>
         }
       >
-        <Sparkline data={data} />
+        <TimeSeriesChart
+          values={data}
+          times={series && series.ts.length > 2 ? series.ts : history.slice(-600).map((sample) => sample.ts)}
+          unit={units.count}
+          height={170}
+        />
         <div className="mt-2 flex justify-between text-[10px] text-[var(--muted)]">
           <span>{data.length} points</span>
           <span>now {latest ? `${convertCount(latest.cps, units.count).toFixed(1)} ${units.count}` : ""}</span>
@@ -896,7 +780,13 @@ function RateView({ now }: { now: number }) {
         </div>
       </Card>
       <Card title="Dose rate series">
-        <Sparkline data={(series?.dose_rate_usvh ?? history.map((t) => t.dose_rate_usvh)).slice(-600)} />
+        <TimeSeriesChart
+          values={(series?.dose_rate_usvh ?? history.map((t) => t.dose_rate_usvh)).slice(-600)}
+          times={series?.ts}
+          unit="µSv/h"
+          color="var(--amber)"
+          height={170}
+        />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="CPS distribution">

@@ -36,6 +36,8 @@ Radiadash aims to be a fast, local-first desktop console:
   explicit confirmation before writing to the device
 - Geiger audio generated from the measured CPS (Poisson-jittered clicks)
 - Distributions: CPS and dose-rate histograms, ranges from 5 minutes to 24 hours
+- Zoomable charts: scroll wheel or trackpad, drag to pan, +/− buttons and reset;
+  colour-coded spectrum bars and category colours for isotope candidates
 - Layout density: comfortable, compact or focus
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
