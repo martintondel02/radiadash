@@ -1,4 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  COUNT_UNITS,
+  DOSE_RATE_UNITS,
+  DOSE_UNITS,
+  convertCount,
+  convertDose,
+  convertDoseRate,
+  formatValue,
+  type CountUnit,
+  type DoseRateUnit,
+  type DoseUnit,
+} from "./lib/units";
+import type { SpectrumPayload, Telemetry } from "./lib/types";
+import { useApp } from "./store";
 
 type NavKey = "overview" | "spectrum" | "rate" | "map" | "history" | "device";
 
@@ -23,49 +37,95 @@ function Logo() {
   );
 }
 
-function Sparkline({ data, width = 260, height = 56 }: { data: number[]; width?: number; height?: number }) {
+function Sparkline({ data }: { data: number[] }) {
   const path = useMemo(() => {
+    if (data.length < 2) return "";
+    const width = 600;
+    const height = 120;
     const max = Math.max(...data);
     const min = Math.min(...data);
     const span = max - min || 1;
     return data
-      .map((v, i) => {
-        const x = (i / (data.length - 1)) * width;
-        const y = height - ((v - min) / span) * (height - 6) - 3;
-        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
+      .map((value, index) => {
+        const x = (index / (data.length - 1)) * width;
+        const y = height - ((value - min) / span) * (height - 8) - 4;
+        return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
-  }, [data, width, height]);
+  }, [data]);
+
+  if (!path) {
+    return <div className="flex h-28 items-center justify-center text-xs text-[var(--muted)]">waiting for samples…</div>;
+  }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" aria-hidden="true">
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinejoin="round" />
+    <svg viewBox="0 0 600 120" className="h-28 w-full" preserveAspectRatio="none" aria-hidden="true">
+      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function SpectrumPreview() {
-  const bars = useMemo(() => {
-    const out: number[] = [];
-    for (let i = 0; i < 128; i++) {
-      const x = i / 128;
-      let v = 12 * Math.exp(-x * 9) + 2.5;
-      v += 46 * Math.exp(-Math.pow((x - 0.215) / 0.012, 2)); // 661.7 keV
-      v += 14 * Math.exp(-Math.pow((x - 0.475) / 0.014, 2)); // 1460.8 keV
-      v += 10 * Math.exp(-Math.pow((x - 0.115) / 0.01, 2)); // 351.9 keV
-      out.push(v);
-    }
-    return out;
-  }, []);
-  const max = Math.max(...bars);
+function energyOf(spectrum: SpectrumPayload, channel: number) {
+  return spectrum.a0 + spectrum.a1 * channel + spectrum.a2 * channel * channel;
+}
 
+function SpectrumChart({ spectrum, height = 180 }: { spectrum: SpectrumPayload | null; height?: number }) {
+  const bars = useMemo(() => {
+    if (!spectrum) return [] as number[];
+    const counts = spectrum.counts;
+    const max = Math.max(...counts, 1);
+    return counts.map((value) => Math.log10(1 + value) / Math.log10(1 + max));
+  }, [spectrum]);
+
+  if (!spectrum || bars.length === 0) {
+    return <div className="flex h-44 items-center justify-center text-xs text-[var(--muted)]">no spectrum yet</div>;
+  }
+
+  const width = 1024;
   return (
-    <svg viewBox="0 0 128 64" className="w-full" preserveAspectRatio="none" aria-hidden="true">
-      {bars.map((v, i) => (
-        <rect key={i} x={i} y={64 - (v / max) * 60} width={0.72} height={(v / max) * 60} fill="var(--accent)" opacity={0.75} />
-      ))}
-      <line x1="0" y1="63.5" x2="128" y2="63.5" stroke="var(--border)" strokeWidth="0.5" />
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" aria-hidden="true">
+        {bars.map((value, index) => (
+          <rect
+            key={index}
+            x={index}
+            y={height - value * (height - 4)}
+            width={0.8}
+            height={value * (height - 4)}
+            fill="var(--accent)"
+            opacity={0.78}
+          />
+        ))}
+        <line x1="0" y1={height - 0.5} x2={width} y2={height - 0.5} stroke="var(--border)" strokeWidth="0.6" />
+      </svg>
+      <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
+        <span>0 keV</span>
+        <span>{Math.round(energyOf(spectrum, 512))} keV</span>
+        <span>{Math.round(energyOf(spectrum, spectrum.counts.length - 1))} keV</span>
+      </div>
+    </div>
+  );
+}
+
+function Card({
+  title,
+  children,
+  className = "",
+  action,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <section className={`panel p-4 ${className}`}>
+      <header className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{title}</h2>
+        {action}
+      </header>
+      {children}
+    </section>
   );
 }
 
@@ -82,40 +142,355 @@ function Stat({ label, value, unit, sub }: { label: string; value: string; unit:
   );
 }
 
-function Card({ title, children, className = "", action }: { title: string; children: React.ReactNode; className?: string; action?: React.ReactNode }) {
+function StatusPill({ status }: { status: string }) {
+  const style =
+    status === "connected"
+      ? "border-[var(--accent-dim)] text-[var(--accent)]"
+      : status === "connecting"
+        ? "border-[var(--amber)] text-[var(--amber)]"
+        : status === "error"
+          ? "border-[var(--danger)] text-[var(--danger)]"
+          : status === "demo"
+            ? "border-[var(--border)] text-[var(--muted)]"
+            : "border-[var(--border)] text-[var(--muted)]";
   return (
-    <section className={`panel p-4 ${className}`}>
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted)]">{title}</h2>
-        {action}
-      </header>
-      {children}
-    </section>
+    <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${style}`}>
+      {status}
+    </span>
   );
 }
 
-function useDemoSeries(n: number, seed = 1) {
-  return useMemo(() => {
-    let s = seed;
-    const rand = () => {
-      s = (s * 1664525 + 1013904223) % 4294967296;
-      return s / 4294967296;
-    };
-    return Array.from({ length: n }, (_, i) => 70 + 18 * Math.sin(i / 9) + 8 * (rand() - 0.5));
-  }, [n, seed]);
+function elapsedText(startedAt: number | null, now: number) {
+  if (!startedAt) return "—";
+  const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+function ConnectionPanel() {
+  const { status, identity, message, connecting, connect, disconnect } = useApp();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              status === "connected" ? "bg-[var(--accent)]" : status === "error" ? "bg-[var(--danger)]" : "bg-[var(--amber)]"
+            }`}
+          />
+          <span className="font-medium capitalize">{status}</span>
+        </div>
+        {status === "connected" && (
+          <button onClick={() => void disconnect()} className="text-[10px] text-[var(--muted)] hover:text-[var(--text)]">
+            disconnect
+          </button>
+        )}
+      </div>
+
+      {identity ? (
+        <div className="mt-2 space-y-0.5 text-[11px] text-[var(--muted)]">
+          <div className="num text-[var(--text)]">{identity.serial}</div>
+          <div>
+            fw {identity.firmware.major}.{identity.firmware.minor} · {identity.transport}
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+          {message ?? "Connect over Bluetooth (first) or USB."}
+        </p>
+      )}
+
+      {status !== "connected" && (
+        <>
+          <button
+            disabled={connecting}
+            onClick={() => void connect({ kind: "auto" })}
+            className="mt-3 w-full rounded-md border border-[var(--border)] px-2 py-1.5 text-[11px] hover:border-[var(--accent-dim)] disabled:opacity-50"
+          >
+            {connecting ? "Connecting…" : "Connect"}
+          </button>
+          <button onClick={() => setOpen(!open)} className="mt-1 w-full text-[10px] text-[var(--muted)] hover:text-[var(--text)]">
+            {open ? "hide options" : "transport options"}
+          </button>
+          {open && (
+            <div className="mt-1 grid grid-cols-2 gap-1">
+              <button
+                onClick={() => void connect({ kind: "usb" })}
+                className="rounded border border-[var(--border)] px-1.5 py-1 text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+              >
+                USB
+              </button>
+              <button
+                onClick={() => void connect({ kind: "ble" })}
+                className="rounded border border-[var(--border)] px-1.5 py-1 text-[10px] text-[var(--muted)] hover:text-[var(--text)]"
+              >
+                Bluetooth
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      <div className="mt-2 px-1 text-[10px] text-[var(--muted)]">v0.1.0 · M2 live</div>
+    </div>
+  );
+}
+
+function Overview({ now }: { now: number }) {
+  const { latest, history, spectrum, identity, units, startedAt } = useApp();
+  const cpsValues = history.slice(-360).map((t) => t.cps);
+
+  const doseRate = latest ? convertDoseRate(latest.dose_rate_usvh, units.doseRate) : null;
+  const rateDisplay = doseRate === null ? null : formatValue(doseRate);
+  const dose = latest?.dose_usv != null ? convertDose(latest.dose_usv, units.dose) : null;
+  const doseDisplay = dose === null ? null : formatValue(dose);
+  const cps = latest ? convertCount(latest.cps, units.count) : null;
+  const cpsDisplay = cps === null ? null : formatValue(cps);
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card
+        title="Count rate"
+        className="lg:col-span-2"
+        action={<span className="num text-[11px] text-[var(--muted)]">last {cpsValues.length} s</span>}
+      >
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <Stat
+            label="Live"
+            value={cpsDisplay?.text ?? "—"}
+            unit={units.count}
+            sub={latest ? `± ${latest.cps_err.toFixed(1)} % · ${Math.round(latest.cps * 60).toLocaleString()} cpm` : "no data"}
+          />
+          <div className="text-right text-[10px] text-[var(--muted)]">
+            <div className="num">{latest?.flags ? `flags 0x${latest.flags.toString(16).padStart(4, "0")}` : ""}</div>
+            <div>{history.length} samples in session</div>
+          </div>
+        </div>
+        <div className="mt-3">
+          <Sparkline data={cpsValues} />
+        </div>
+      </Card>
+
+      <Card title="Dose rate" action={
+          <span className="text-[10px] text-[var(--muted)]">{identity ? `device: ${identity.config?.DS_AlarmMax_R ? "R" : "Sv"}` : ""}</span>
+        }>
+        <Stat
+          label="Current"
+          value={rateDisplay?.text ?? "—"}
+          unit={units.doseRate}
+          sub={latest ? `± ${latest.dose_rate_err.toFixed(1)} %` : "no data"}
+        />
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--panel-2)]">
+          <div
+            className="h-full rounded-full bg-[var(--accent)]"
+            style={{ width: `${Math.min(100, ((latest?.dose_rate_usvh ?? 0) / 5) * 100)}%` }}
+          />
+        </div>
+        <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
+          <span>0</span>
+          <span>5 µSv/h</span>
+        </div>
+      </Card>
+
+      <Card title="Spectrum · 1024 ch">
+        <SpectrumChart spectrum={spectrum} height={130} />
+        <div className="mt-2 flex items-center justify-between text-[10px] text-[var(--muted)]">
+          <span>{spectrum ? `${spectrum.counts.reduce((a, b) => a + b, 0).toLocaleString()} counts` : "—"}</span>
+          <span>{spectrum ? `${spectrum.duration_s.toLocaleString()} s live` : ""}</span>
+        </div>
+      </Card>
+
+      <Card title="Accumulated dose">
+        <Stat
+          label="Session total"
+          value={doseDisplay?.text ?? "—"}
+          unit={units.dose}
+          sub={startedAt ? `since ${new Date(startedAt).toLocaleTimeString()} · ${elapsedText(startedAt, now)}` : "not connected"}
+        />
+        <button
+          onClick={() => void useApp.getState().resetDose()}
+          disabled={!latest}
+          className="mt-3 rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40"
+        >
+          reset device counter
+        </button>
+      </Card>
+
+      <Card title="Device">
+        <dl className="grid grid-cols-2 gap-y-2 text-xs">
+          {[
+            ["Model", identity?.model ?? "RC-110"],
+            ["Serial", identity?.serial ?? "—"],
+            ["Firmware", identity ? `${identity.firmware.major}.${identity.firmware.minor}` : "—"],
+            ["Battery", latest?.charge != null ? `${latest.charge.toFixed(0)} %` : "—"],
+            ["Temperature", latest?.temp_c != null ? `${latest.temp_c.toFixed(1)} °C` : "—"],
+            ["Transport", identity?.transport ?? "not connected"],
+          ].map(([key, value]) => (
+            <div key={key} className="contents">
+              <dt className="text-[var(--muted)]">{key}</dt>
+              <dd className="num truncate text-right" title={String(value)}>
+                {value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      <Card title="Isotope candidates" className="lg:col-span-2">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { name: "Cs-137", conf: "pending", lines: "661.7 keV · M3" },
+            { name: "K-40", conf: "pending", lines: "1460.8 keV · M3" },
+            { name: "Bi-214", conf: "pending", lines: "609.3 · 1120.3 · 1764.5" },
+            { name: "Pb-214", conf: "pending", lines: "295.2 · 351.9" },
+          ].map((iso) => (
+            <div key={iso.name} className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className="num text-sm font-medium">{iso.name}</span>
+                <span className="rounded-full border border-[var(--border)] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[var(--muted)]">
+                  {iso.conf}
+                </span>
+              </div>
+              <div className="num mt-1 text-[10px] text-[var(--muted)]">{iso.lines}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
+          Peak matching and the isotope library land in M3. The spectrum above is live from the device.
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function SpectrumView() {
+  const { spectrum } = useApp();
+  const peaks = useMemo(() => {
+    if (!spectrum) return [];
+    const counts = spectrum.counts;
+    const out: { channel: number; energy: number; counts: number }[] = [];
+    for (let i = 2; i < counts.length - 2; i++) {
+      const value = counts[i];
+      if (value > 50 && value > counts[i - 1] && value >= counts[i + 1] && value > counts[i - 2] && value >= counts[i + 2]) {
+        out.push({ channel: i, energy: energyOf(spectrum, i), counts: value });
+      }
+    }
+    return out.sort((a, b) => b.counts - a.counts).slice(0, 8).sort((a, b) => a.channel - b.channel);
+  }, [spectrum]);
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <Card title="Energy spectrum" className="lg:col-span-2">
+        <SpectrumChart spectrum={spectrum} height={320} />
+      </Card>
+      <Card title="Detected peaks">
+        {peaks.length === 0 && <p className="text-xs text-[var(--muted)]">No peaks above threshold yet.</p>}
+        <ul className="space-y-1.5 text-xs">
+          {peaks.map((peak) => (
+            <li key={peak.channel} className="flex items-center justify-between gap-2">
+              <span className="num text-[var(--accent)]">{peak.energy.toFixed(1)} keV</span>
+              <span className="num text-[var(--muted)]">ch {peak.channel} · {peak.counts.toLocaleString()}</span>
+            </li>
+          ))}
+        </ul>
+        {spectrum && (
+          <p className="num mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
+            a0={spectrum.a0.toFixed(3)} a1={spectrum.a1.toFixed(5)} a2={spectrum.a2.toExponential(2)}
+          </p>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function RateView({ now }: { now: number }) {
+  const { series, history, units, latest, refreshSeries } = useApp();
+  const [range, setRange] = useState(3600);
+
+  const data = useMemo(() => {
+    if (series && series.cps.length > 2) return series.cps;
+    return history.slice(-600).map((t) => t.cps);
+  }, [series, history]);
+
+  return (
+    <div className="space-y-4">
+      <Card
+        title="Count rate"
+        action={
+          <div className="flex gap-1">
+            {[
+              [300, "5m"],
+              [3600, "1h"],
+              [21600, "6h"],
+              [86400, "24h"],
+            ].map(([seconds, label]) => (
+              <button
+                key={String(label)}
+                onClick={() => {
+                  setRange(seconds as number);
+                  void refreshSeries(seconds as number);
+                }}
+                className={`rounded border px-1.5 py-0.5 text-[10px] ${
+                  range === seconds
+                    ? "border-[var(--accent-dim)] text-[var(--accent)]"
+                    : "border-[var(--border)] text-[var(--muted)]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      >
+        <Sparkline data={data} />
+        <div className="mt-2 flex justify-between text-[10px] text-[var(--muted)]">
+          <span>{data.length} points</span>
+          <span>now {latest ? `${convertCount(latest.cps, units.count).toFixed(1)} ${units.count}` : ""}</span>
+          <span>{elapsedText(useApp.getState().startedAt, now)}</span>
+        </div>
+      </Card>
+      <Card title="Dose rate series">
+        <Sparkline data={(series?.dose_rate_usvh ?? history.map((t) => t.dose_rate_usvh)).slice(-600)} />
+      </Card>
+    </div>
+  );
+}
+
+function Placeholder({ title, milestone, body }: { title: string; milestone: string; body: string }) {
+  return (
+    <Card title={title}>
+      <div className="rounded-lg border border-dashed border-[var(--border)] p-6 text-center">
+        <div className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">{milestone}</div>
+        <p className="mt-2 text-sm">{body}</p>
+      </div>
+    </Card>
+  );
 }
 
 export default function App() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const { theme, toggleTheme, units, setDoseRateUnit, setDoseUnit, setCountUnit, status, init } = useApp();
   const [nav, setNav] = useState<NavKey>("overview");
-  const [unit, setUnit] = useState("µSv/h");
-  const cps = useDemoSeries(96, 7);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    void init();
+  }, [init]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.classList.toggle("light", theme === "light");
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  const page = NAV.find((item) => item.key === nav);
 
   return (
     <div className="flex h-full">
@@ -134,7 +509,7 @@ export default function App() {
               key={item.key}
               onClick={() => setNav(item.key)}
               aria-current={nav === item.key ? "page" : undefined}
-              className={`group flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              className={`flex items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
                 nav === item.key
                   ? "bg-[var(--panel-2)] text-[var(--text)]"
                   : "text-[var(--muted)] hover:bg-[var(--panel-2)] hover:text-[var(--text)]"
@@ -147,146 +522,107 @@ export default function App() {
         </nav>
 
         <div className="mt-auto p-3">
-          <div className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="h-2 w-2 rounded-full bg-[var(--amber)]" />
-              <span className="font-medium">No device</span>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
-              Bluetooth and USB transports land in M1/M2. Until then the panel shows demo data.
-            </p>
-            <button className="mt-3 w-full rounded-md border border-[var(--border)] px-2 py-1.5 text-[11px] text-[var(--text)] hover:border-[var(--accent-dim)]">
-              Connect device
-            </button>
-          </div>
-          <div className="mt-2 px-1 text-[10px] text-[var(--muted)]">v0.1.0 · M0 scaffold</div>
+          <ConnectionPanel />
         </div>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-[var(--border)] px-6 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-6 py-3">
           <div className="min-w-0">
-            <h1 className="truncate text-sm font-medium">{NAV.find((n) => n.key === nav)?.label}</h1>
-            <p className="truncate text-[11px] text-[var(--muted)]">{NAV.find((n) => n.key === nav)?.hint}</p>
+            <h1 className="truncate text-sm font-medium">{page?.label}</h1>
+            <p className="truncate text-[11px] text-[var(--muted)]">{page?.hint}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusPill status={status} />
             <select
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1.5 text-xs text-[var(--text)]"
+              value={units.doseRate}
+              onChange={(event) => setDoseRateUnit(event.target.value as DoseRateUnit)}
+              className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1.5 text-xs"
               aria-label="Dose rate unit"
             >
-              <option>µSv/h</option>
-              <option>mSv/h</option>
-              <option>µR/h</option>
-              <option>mrem/h</option>
+              {DOSE_RATE_UNITS.map((unit) => (
+                <option key={unit}>{unit}</option>
+              ))}
+            </select>
+            <select
+              value={units.dose}
+              onChange={(event) => setDoseUnit(event.target.value as DoseUnit)}
+              className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1.5 text-xs"
+              aria-label="Dose unit"
+            >
+              {DOSE_UNITS.map((unit) => (
+                <option key={unit}>{unit}</option>
+              ))}
+            </select>
+            <select
+              value={units.count}
+              onChange={(event) => setCountUnit(event.target.value as CountUnit)}
+              className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-2 py-1.5 text-xs"
+              aria-label="Count rate unit"
+            >
+              {COUNT_UNITS.map((unit) => (
+                <option key={unit}>{unit}</option>
+              ))}
             </select>
             <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              onClick={toggleTheme}
               className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
               aria-label="Toggle theme"
             >
               {theme === "dark" ? "Light" : "Dark"}
             </button>
-            <span className="rounded-full border border-[var(--border)] px-2.5 py-1 text-[10px] uppercase tracking-wider text-[var(--muted)]">
-              demo
-            </span>
           </div>
         </header>
 
         <div className="flex-1 overflow-auto p-6">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card
-              title="Count rate"
-              className="lg:col-span-2"
-              action={<span className="num text-[11px] text-[var(--muted)]">last 96 s</span>}
-            >
-              <Stat label="Live" value="84.2" unit="cps" sub="± 1.1 % · 5 052 cpm" />
-              <div className="mt-3">
-                <Sparkline data={cps} />
-              </div>
-            </Card>
-
-            <Card title="Dose rate">
-              <Stat label="Current" value="1.094" unit={unit} sub="device: Sv · alarm at 5 µSv/h" />
-              <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[var(--panel-2)]">
-                <div className="h-full w-[22%] rounded-full bg-[var(--accent)]" />
-              </div>
-              <div className="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
-                <span>0</span>
-                <span>5 µSv/h</span>
-              </div>
-            </Card>
-
-            <Card title="Spectrum · 1024 ch">
-              <SpectrumPreview />
-              <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--muted)]">
-                <span>0 keV</span>
-                <span className="text-[var(--accent)]">Cs-137 · 661.7 keV · 92 %</span>
-                <span>3 MeV</span>
-              </div>
-            </Card>
-
-            <Card title="Accumulated dose">
-              <Stat label="Session total" value="0.412" unit="µSv" sub="since 22:04 · 18 min" />
-              <div className="mt-3 flex items-center gap-2 text-[11px] text-[var(--muted)]">
-                <span className="rounded border border-[var(--border)] px-1.5 py-0.5">reset</span>
-                <span>device counter synced</span>
-              </div>
-            </Card>
-
-            <Card title="Device">
-              <dl className="grid grid-cols-2 gap-y-2 text-xs">
-                {[
-                  ["Model", "RC-110"],
-                  ["Serial", "—"],
-                  ["Firmware", "—"],
-                  ["Battery", "87 %"],
-                  ["Temperature", "24.5 °C"],
-                  ["Transport", "not connected"],
-                ].map(([k, v]) => (
-                  <div key={k} className="contents">
-                    <dt className="text-[var(--muted)]">{k}</dt>
-                    <dd className="num text-right">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            </Card>
-
-            <Card title="Isotope candidates" className="lg:col-span-2">
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { name: "Cs-137", conf: "high", lines: "661.7 · 32 keV X-ray" },
-                  { name: "K-40", conf: "high", lines: "1460.8 keV" },
-                  { name: "Bi-214", conf: "medium", lines: "609.3 · 1120.3 · 1764.5" },
-                  { name: "Pb-214", conf: "medium", lines: "295.2 · 351.9" },
-                ].map((iso) => (
-                  <div key={iso.name} className="rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="num text-sm font-medium">{iso.name}</span>
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[9px] uppercase tracking-wider ${
-                          iso.conf === "high" ? "bg-[var(--accent-dim)] text-[var(--text)]" : "border border-[var(--border)] text-[var(--muted)]"
-                        }`}
-                      >
-                        {iso.conf}
-                      </span>
-                    </div>
-                    <div className="mt-1 num text-[10px] text-[var(--muted)]">{iso.lines}</div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
-                Candidate identification from peak matching. Not a certified measurement — always verify with a calibrated instrument.
-              </p>
-            </Card>
-          </div>
-
+          {nav === "overview" && <Overview now={now} />}
+          {nav === "spectrum" && <SpectrumView />}
+          {nav === "rate" && <RateView now={now} />}
+          {nav === "map" && (
+            <Placeholder title="Map" milestone="M5" body="Geotag surveys from manual pins, gpsd, GPX or .rctrk imports." />
+          )}
+          {nav === "history" && (
+            <Placeholder title="History" milestone="M2 storage / M6 export" body="Sessions are stored in SQLite; browsing and export arrive next." />
+          )}
+          {nav === "device" && (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Card title="Device">
+                <DeviceDetails />
+              </Card>
+              <Placeholder title="Settings" milestone="M6" body="Brightness, sound, alarms and calibration editing land in M6." />
+            </div>
+          )}
           <p className="mt-6 text-center text-[10px] text-[var(--muted)]">
-            M0 scaffold · charts and widgets are placeholders until the protocol core is wired to the UI (M2).
+            M2 · live data over BLE/USB · stored locally in SQLite · no cloud
           </p>
         </div>
       </main>
     </div>
   );
 }
+
+function DeviceDetails() {
+  const { identity, latest } = useApp();
+  const rows: [string, string][] = [
+    ["Model", identity?.model ?? "RC-110 (reported by firmware: DType=4)"],
+    ["Serial", identity?.serial ?? "—"],
+    ["Hardware serial", identity?.hw_serial ?? "—"],
+    ["Firmware", identity ? `${identity.firmware.major}.${identity.firmware.minor} · ${identity.firmware.date}` : "—"],
+    ["Spectrum format", identity ? String(identity.spectrum_format) : "—"],
+    ["Transport", identity?.transport ?? "—"],
+    ["Battery", latest?.charge != null ? `${latest.charge.toFixed(1)} %` : "—"],
+    ["Temperature", latest?.temp_c != null ? `${latest.temp_c.toFixed(2)} °C` : "—"],
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-y-2 text-xs">
+      {rows.map(([key, value]) => (
+        <div key={key} className="contents">
+          <dt className="text-[var(--muted)]">{key}</dt>
+          <dd className="num truncate text-right" title={value}>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export type { Telemetry };

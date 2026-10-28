@@ -3,11 +3,11 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
-> Status: **M0/M1** — protocol core, BLE transport and a CLI probe work against a
-> real RC-110 (firmware 4.14); the UI is a static scaffold until M2 wires it to live
-> data.
+> Status: **M2** — live dashboard wired to a real RC-110 over BLE **and** USB:
+> counts, dose rate, accumulated dose, battery, temperature and spectrum are
+> streaming into SQLite. Isotope identification lands in M3.
 
-![Radiadash UI scaffold](docs/screenshot-m0.png)
+![Radiadash live dashboard](docs/screenshot-m2.png)
 
 ## Why
 
@@ -22,7 +22,16 @@ Radiadash aims to be a fast, local-first desktop console:
 - Geiger counter audio driven by the measured count rate
 - Dark and light themes, unit switching (Sv, rem, Gy, rad, R, cps/cpm, keV/MeV)
 - Map view for surveys (RC-110 has no GPS, so tracks come from imports, `gpsd` or manual pins)
-- All data stays in a local SQLite database
+- All data stays in a local SQLite database (`~/.local/share/io.github.martintondel.radiadash/`)
+
+## What works today
+
+- Auto-connect on launch: Bluetooth first, USB fallback, explicit transport pick
+- Live CPS with error bars and a rolling chart, dose rate, accumulated dose
+- Device panel: serial, firmware, battery, temperature, transport, flags
+- Spectrum read every 60 s, stored and rendered with the device calibration
+- Unit switching for dose rate, dose and count rate; dark/light themes
+- Sessions stored in SQLite with downsampled series queries
 
 ## Requirements (Fedora 44)
 
@@ -85,7 +94,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/protocol.md](docs/pro
 | --- | --- |
 | M0 ✅ | Repository, CI, Tauri/React scaffold, design tokens |
 | M1 ✅ | Protocol core, USB + BLE, probe CLI, simulator, tests |
-| M2 | Live dashboard, SQLite sessions, dark/light, units |
+| M2 ✅ | Live dashboard, SQLite sessions, units, auto-connect |
 | M3 | Spectrum view, calibration, isotope library + fingerprint overlay |
 | M4 | Workspaces, ranges, distributions, Geiger audio |
 | M5 | Geotagging, map view, `.rctrk`/GPX import, exports |

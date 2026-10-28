@@ -18,8 +18,13 @@ released yet. Tracked here instead of pinning an old Tauri.
    not a percentage, or the BLE load is real. Needs a longer observation.
 3. `DS_UNITS` reads as `1` while the device configuration and display are in
    roentgen. The register may be inverted on RC-110 or means something else.
-   Radiadash prefers the configuration keys until this is resolved.
-4. USB transport is implemented but has not yet been exercised on this unit.
+   Radiadash prefers the configuration keys (`*_R` alarm limits) until this is
+   confirmed against the display.
+4. The battery field is noisy: 99 % → 61 % → 90 % within twenty minutes while
+   USB-powered. It may be a gauge in different units, not a percentage.
+5. `RareData` (dose, battery, temperature) is sent infrequently and unpredictably.
+   M2 seeds those values from the last database row and from the temperature
+   register at connect, then updates them when a new rare record arrives.
 
 ## UI
 

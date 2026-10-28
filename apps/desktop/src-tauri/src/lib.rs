@@ -1,16 +1,37 @@
-//! Tauri shell for Radiadash.
-//!
-//! M0 only exposes an `app_info` command so the frontend can prove the IPC
-//! bridge works. The device session and data pipeline are wired in M2.
+//! Tauri shell for Radiadash: IPC surface and app bootstrap.
 
+mod manager;
+mod store;
+
+use std::sync::Arc;
+
+use manager::{Cmd, ConnectRequest, Shared, Snapshot, SpectrumPayload};
 use serde::Serialize;
+use store::{Db, Series};
+use tauri::{Manager, State};
+use tokio::sync::{mpsc, RwLock};
+
+struct AppState {
+    shared: Arc<Shared>,
+}
 
 #[derive(Serialize)]
 pub struct AppInfo {
     pub name: &'static str,
     pub version: &'static str,
     pub core_version: &'static str,
-    pub stage: &'static str,
+}
+
+#[derive(Serialize, Default)]
+pub struct DeviceList {
+    pub usb: Vec<radiadash_core::usb::UsbDeviceInfo>,
+    pub ble: Vec<BleDevice>,
+}
+
+#[derive(Serialize)]
+pub struct BleDevice {
+    pub address: String,
+    pub name: String,
 }
 
 #[tauri::command]
@@ -19,14 +40,151 @@ fn app_info() -> AppInfo {
         name: "Radiadash",
         version: env!("CARGO_PKG_VERSION"),
         core_version: "0.1.0",
-        stage: "M0 scaffold",
     }
+}
+
+#[tauri::command]
+async fn connect_device(state: State<'_, AppState>, request: ConnectRequest) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::Connect(request))
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn disconnect_device(state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::Disconnect)
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn set_spectrum_interval(state: State<'_, AppState>, seconds: u64) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::SetSpectrumInterval(seconds))
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn reset_dose(state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::ResetDose)
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn get_snapshot(state: State<'_, AppState>) -> Result<Snapshot, String> {
+    Ok(state.shared.snapshot.read().await.clone())
+}
+
+#[tauri::command]
+async fn get_series(state: State<'_, AppState>, range_seconds: i64) -> Result<Series, String> {
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    db.series(range_seconds.clamp(10, 90 * 86_400) * 1000)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_latest_spectrum(state: State<'_, AppState>) -> Result<Option<SpectrumPayload>, String> {
+    let snapshot = state.shared.snapshot.read().await;
+    if let Some(spectrum) = &snapshot.spectrum {
+        return Ok(Some(spectrum.clone()));
+    }
+    drop(snapshot);
+
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    match db.latest_spectrum().map_err(|e| e.to_string())? {
+        Some(stored) => Ok(Some(SpectrumPayload {
+            ts: stored.ts,
+            duration_s: stored.duration_s,
+            a0: stored.a0,
+            a1: stored.a1,
+            a2: stored.a2,
+            counts: stored.counts,
+        })),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+async fn list_devices() -> Result<DeviceList, String> {
+    let usb = radiadash_core::usb::list().await.map_err(|e| e.to_string())?;
+    let ble = radiadash_core::ble::scan(4)
+        .await
+        .map(|list| {
+            list.into_iter()
+                .map(|(address, name)| BleDevice { address, name })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(DeviceList { usb, ble })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            let db_path = data_dir.join("radiadash.db");
+            let db = Arc::new(std::sync::Mutex::new(Db::open(&db_path)?));
+            if let Ok(db) = db.lock() {
+                let _ = db.close_stale_sessions();
+            }
+
+            let (tx, rx) = mpsc::channel(32);
+            let snapshot = Snapshot {
+                status: "disconnected".into(),
+                spectrum_interval_s: manager::DEFAULT_SPECTRUM_INTERVAL_S,
+                ..Default::default()
+            };
+            let shared = Arc::new(Shared {
+                snapshot: RwLock::new(snapshot),
+                tx,
+                db_path,
+            });
+            app.manage(AppState {
+                shared: shared.clone(),
+            });
+
+            let handle = app.handle().clone();
+            let auto = shared.tx.clone();
+            tauri::async_runtime::spawn(async move {
+                manager::run(handle, shared, rx, db).await;
+            });
+            // Try to connect on launch; the UI can override with an explicit request.
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                let _ = auto
+                    .send(Cmd::Connect(ConnectRequest {
+                        transport: manager::TransportChoice::Auto,
+                        scan_secs: 6,
+                    }))
+                    .await;
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            connect_device,
+            disconnect_device,
+            set_spectrum_interval,
+            reset_dose,
+            get_snapshot,
+            get_series,
+            get_latest_spectrum,
+            list_devices
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Radiadash");
 }

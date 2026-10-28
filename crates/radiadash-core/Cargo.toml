@@ -16,7 +16,7 @@ tracing.workspace = true
 futures.workspace = true
 async-trait.workspace = true
 encoding_rs.workspace = true
-nusb = { workspace = true, optional = true }
+nusb = { workspace = true, optional = true, features = ["tokio"] }
 bluer = { workspace = true, optional = true, features = ["bluetoothd"] }
 
 [features]
