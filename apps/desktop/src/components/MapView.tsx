@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Map as MapLibreMap, Marker, NavigationControl, Popup } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useApp } from "../store";
+import { addTrackPoint, exportTrack } from "../lib/ipc";
 
 function doseColor(dose: number) {
   if (dose < 0) return "#8ea1ad";
@@ -12,7 +13,7 @@ function doseColor(dose: number) {
 }
 
 export default function MapView() {
-  const { track, loadTrack, importTrack, clearTrack, message } = useApp();
+  const { track, latest, loadTrack, importTrack, clearTrack, message } = useApp();
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MapLibreMap | null>(null);
   const fitted = useRef(false);
@@ -20,6 +21,10 @@ export default function MapView() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [filter, setFilter] = useState<[number, number]>([0, 1]);
+  const [lat, setLat] = useState("59.9139");
+  const [lon, setLon] = useState("10.7522");
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void loadTrack();
@@ -66,6 +71,18 @@ export default function MapView() {
     };
   }, []);
 
+  const timeBounds = useMemo(() => {
+    const stamps = track.map((point) => point.ts).filter((ts) => ts > 0);
+    return stamps.length > 1 ? { min: Math.min(...stamps), max: Math.max(...stamps) } : null;
+  }, [track]);
+
+  const visibleTrack = useMemo(() => {
+    if (!timeBounds) return track;
+    const from = timeBounds.min + (timeBounds.max - timeBounds.min) * filter[0];
+    const to = timeBounds.min + (timeBounds.max - timeBounds.min) * filter[1];
+    return track.filter((point) => point.ts === 0 || (point.ts >= from && point.ts <= to));
+  }, [track, timeBounds, filter]);
+
   useEffect(() => {
     const instance = map.current;
     if (!instance || !ready) return;
@@ -76,9 +93,9 @@ export default function MapView() {
     // DOM markers are used instead of a vector layer because they render on
     // every GL stack (including software rendering) and keep the app usable
     // on machines without GPU acceleration.
-    const stride = Math.max(1, Math.ceil(track.length / 500));
-    for (let index = 0; index < track.length; index += stride) {
-      const point = track[index];
+    const stride = Math.max(1, Math.ceil(visibleTrack.length / 500));
+    for (let index = 0; index < visibleTrack.length; index += stride) {
+      const point = visibleTrack[index];
       const element = document.createElement("div");
       element.style.width = "8px";
       element.style.height = "8px";
@@ -111,10 +128,10 @@ export default function MapView() {
       markers.current.push(new Marker({ element }).setLngLat([point.lon, point.lat]).addTo(instance));
     }
 
-    if (!fitted.current && track.length > 0) {
+    if (!fitted.current && visibleTrack.length > 0) {
       fitted.current = true;
-      const lons = track.map((point) => point.lon);
-      const lats = track.map((point) => point.lat);
+      const lons = visibleTrack.map((point) => point.lon);
+      const lats = visibleTrack.map((point) => point.lat);
       instance.fitBounds(
         [
           [Math.min(...lons), Math.min(...lats)],
@@ -123,16 +140,16 @@ export default function MapView() {
         { padding: 70, maxZoom: 14, duration: 600 },
       );
     }
-  }, [track, ready]);
+  }, [visibleTrack, ready]);
 
   const stats = useMemo(() => {
-    const doses = track.map((point) => point.dose_rate_usvh).filter((dose): dose is number => dose != null);
+    const doses = visibleTrack.map((point) => point.dose_rate_usvh).filter((dose): dose is number => dose != null);
     return {
-      count: track.length,
+      count: visibleTrack.length,
       min: doses.length ? Math.min(...doses) : null,
       max: doses.length ? Math.max(...doses) : null,
     };
-  }, [track]);
+  }, [visibleTrack]);
 
   const handleImport = async (file: File) => {
     setBusy(true);
@@ -146,6 +163,35 @@ export default function MapView() {
       setStatus(String(error));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleTag = async () => {
+    const latValue = Number(lat);
+    const lonValue = Number(lon);
+    if (!Number.isFinite(latValue) || !Number.isFinite(lonValue)) {
+      setStatus("Enter valid coordinates first.");
+      return;
+    }
+    try {
+      await addTrackPoint(latValue, lonValue);
+      await loadTrack();
+      fitted.current = false;
+      setStatus("Tagged the current reading at those coordinates.");
+    } catch (error) {
+      setStatus(String(error));
+    }
+  };
+
+  const handleExport = async (format: "geojson" | "gpx" | "csv") => {
+    setExporting(true);
+    try {
+      const path = await exportTrack(format);
+      setStatus(`Saved ${path}`);
+    } catch (error) {
+      setStatus(String(error));
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -205,8 +251,98 @@ export default function MapView() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-end gap-2 border-b border-[var(--border)] px-3 py-2 text-[11px]">
+        <label className="flex flex-col gap-1 text-[var(--muted)]">
+          Latitude
+          <input
+            value={lat}
+            onChange={(event) => setLat(event.target.value)}
+            className="w-24 rounded border border-[var(--border)] bg-[var(--panel-2)] px-2 py-1 text-[var(--text)]"
+            inputMode="decimal"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-[var(--muted)]">
+          Longitude
+          <input
+            value={lon}
+            onChange={(event) => setLon(event.target.value)}
+            className="w-24 rounded border border-[var(--border)] bg-[var(--panel-2)] px-2 py-1 text-[var(--text)]"
+            inputMode="decimal"
+          />
+        </label>
+        <button
+          onClick={() => {
+            const center = map.current?.getCenter();
+            if (center) {
+              setLat(center.lat.toFixed(6));
+              setLon(center.lng.toFixed(6));
+            }
+          }}
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--muted)] hover:text-[var(--text)]"
+        >
+          Use map centre
+        </button>
+        <button
+          onClick={() => void handleTag()}
+          disabled={!latest}
+          className="rounded border border-[var(--accent-dim)] px-2 py-1 text-[var(--accent)] disabled:opacity-40"
+          title={latest ? "Store the current dose/CPS at these coordinates" : "Connect a device first"}
+        >
+          Tag current reading
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <span className="text-[var(--muted)]">Export</span>
+          {(["geojson", "gpx", "csv"] as const).map((format) => (
+            <button
+              key={format}
+              onClick={() => void handleExport(format)}
+              disabled={exporting || stats.count === 0}
+              className="rounded border border-[var(--border)] px-2 py-1 uppercase text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40"
+            >
+              {format === "geojson" ? "GeoJSON" : format}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {timeBounds && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-3 py-2 text-[11px] text-[var(--muted)]">
+          <span>Time filter</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={filter[0]}
+            onChange={(event) => setFilter([Math.min(Number(event.target.value), filter[1] - 0.01), filter[1]])}
+            className="w-40"
+            aria-label="Start of time filter"
+          />
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={filter[1]}
+            onChange={(event) => setFilter([filter[0], Math.max(Number(event.target.value), filter[0] + 0.01)])}
+            className="w-40"
+            aria-label="End of time filter"
+          />
+          <span className="num">
+            {new Date(timeBounds.min + (timeBounds.max - timeBounds.min) * filter[0]).toLocaleString()} →{" "}
+            {new Date(timeBounds.min + (timeBounds.max - timeBounds.min) * filter[1]).toLocaleString()}
+          </span>
+          <button
+            onClick={() => setFilter([0, 1])}
+            className="rounded border border-[var(--border)] px-2 py-0.5 hover:text-[var(--text)]"
+          >
+            reset
+          </button>
+        </div>
+      )}
+
       <div className="relative">
-        <div ref={container} className="h-[560px] w-full" />
+        <div ref={container} className="h-[520px] w-full" />
         {track.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)]/90 px-5 py-4 text-center">

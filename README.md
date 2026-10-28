@@ -39,8 +39,11 @@ Radiadash aims to be a fast, local-first desktop console:
 - Zoomable charts: scroll wheel or trackpad, drag to pan, +/− buttons and reset;
   colour-coded spectrum bars and category colours for isotope candidates
 - Layout density: comfortable, compact or focus
-- Survey map: import `.rctrk` (Radiacode phone app) or GPX tracks, points coloured
-  by dose rate, popup details, zoom/pan
+- Survey map: import `.rctrk` (Radiacode phone app) or GPX tracks, tag the live
+  reading at a location, filter by time, export GeoJSON/GPX/CSV
+- In-app guides for every page (and a [markdown copy](docs/user-guide.md))
+
+![In-app guide drawer](docs/screenshot-guide.png)
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
 

@@ -15,6 +15,7 @@ import type { Candidate, Telemetry } from "./lib/types";
 import { useApp } from "./store";
 import { setEnergyCalibration } from "./lib/ipc";
 import { Histogram, SpectrumChart, TimeSeriesChart } from "./components/charts";
+import GuideDrawer from "./components/GuideDrawer";
 
 const MapView = lazy(() => import("./components/MapView"));
 
@@ -834,6 +835,7 @@ export default function App() {
   useGeiger(latest?.cps ?? 0, sound, volume);
   const [nav, setNav] = useState<NavKey>("overview");
   const [now, setNow] = useState(Date.now());
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     void init();
@@ -944,6 +946,13 @@ export default function App() {
               {sound ? "Sound" : "Muted"}
             </button>
             <button
+              onClick={() => setGuideOpen(true)}
+              className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
+              aria-label="Open guide"
+            >
+              ?
+            </button>
+            <button
               onClick={toggleTheme}
               className="rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--muted)] hover:text-[var(--text)]"
               aria-label="Toggle theme"
@@ -1002,6 +1011,12 @@ export default function App() {
           </p>
         </div>
       </main>
+
+      <GuideDrawer
+        page={nav === "history" ? "history" : (nav as "overview" | "spectrum" | "rate" | "map" | "device")}
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+      />
     </div>
   );
 }

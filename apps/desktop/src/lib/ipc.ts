@@ -50,6 +50,14 @@ export async function clearTrack(): Promise<void> {
   return invoke("clear_track");
 }
 
+export async function addTrackPoint(lat: number, lon: number): Promise<number> {
+  return invoke<number>("add_track_point", { lat, lon });
+}
+
+export async function exportTrack(format: "geojson" | "gpx" | "csv"): Promise<string> {
+  return invoke<string>("export_track", { format });
+}
+
 export async function listDevices(): Promise<DeviceList> {
   return invoke<DeviceList>("list_devices");
 }

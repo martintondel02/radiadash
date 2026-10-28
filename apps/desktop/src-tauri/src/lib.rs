@@ -194,6 +194,55 @@ async fn clear_track(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn add_track_point(state: State<'_, AppState>, lat: f64, lon: f64) -> Result<usize, String> {
+    if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+        return Err("coordinates out of range".into());
+    }
+    let latest = state.shared.snapshot.read().await.latest.clone();
+    let point = TrackPoint {
+        ts: chrono::Utc::now().timestamp_millis(),
+        lat,
+        lon,
+        dose_rate_usvh: latest.as_ref().map(|telemetry| telemetry.dose_rate_usvh),
+        cps: latest.as_ref().map(|telemetry| telemetry.cps),
+        source: "live".into(),
+    };
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    db.insert_track(&[point]).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn export_track(state: State<'_, AppState>, format: String) -> Result<String, String> {
+    let db = Db::open(&state.shared.db_path).map_err(|e| e.to_string())?;
+    let points = db.track().map_err(|e| e.to_string())?;
+    if points.is_empty() {
+        return Err("no track points to export".into());
+    }
+
+    let (content, extension) = match format.as_str() {
+        "geojson" => (track::to_geojson(&points), "geojson"),
+        "gpx" => (track::to_gpx(&points), "gpx"),
+        "csv" => (track::to_csv(&points), "csv"),
+        other => return Err(format!("unsupported format {other}")),
+    };
+
+    let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
+    let mut directory = std::path::PathBuf::from(&home).join("Downloads");
+    if !directory.is_dir() {
+        directory =
+            std::path::PathBuf::from(&home).join(".local/share/io.github.martintondel.radiadash/exports");
+        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    }
+    let filename = format!(
+        "radiadash-track-{}.{extension}",
+        chrono::Utc::now().format("%Y%m%d-%H%M%S")
+    );
+    let path = directory.join(filename);
+    std::fs::write(&path, content).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 async fn list_devices() -> Result<DeviceList, String> {
     let usb = radiadash_core::usb::list().await.map_err(|e| e.to_string())?;
     let ble = radiadash_core::ble::scan(4)
@@ -264,6 +313,8 @@ pub fn run() {
             import_track,
             get_track,
             clear_track,
+            add_track_point,
+            export_track,
             list_devices
         ])
         .run(tauri::generate_context!())

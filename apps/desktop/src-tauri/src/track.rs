@@ -119,6 +119,84 @@ pub fn parse_gpx(text: &str, source: &str) -> anyhow::Result<Vec<TrackPoint>> {
     Ok(points)
 }
 
+fn iso_time(ts: i64) -> String {
+    if ts <= 0 {
+        return String::new();
+    }
+    chrono::DateTime::from_timestamp_millis(ts)
+        .map(|time| time.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+        .unwrap_or_default()
+}
+
+/// GeoJSON FeatureCollection of the imported track.
+pub fn to_geojson(points: &[TrackPoint]) -> String {
+    let features: Vec<serde_json::Value> = points
+        .iter()
+        .map(|point| {
+            serde_json::json!({
+                "type": "Feature",
+                "geometry": { "type": "Point", "coordinates": [point.lon, point.lat] },
+                "properties": {
+                    "time": iso_time(point.ts),
+                    "timestamp_ms": point.ts,
+                    "dose_rate_usvh": point.dose_rate_usvh,
+                    "cps": point.cps,
+                    "source": point.source,
+                }
+            })
+        })
+        .collect();
+    serde_json::to_string_pretty(&serde_json::json!({
+        "type": "FeatureCollection",
+        "features": features,
+    }))
+    .unwrap_or_else(|_| "{\"type\":\"FeatureCollection\",\"features\":[]}".to_string())
+}
+
+/// Minimal GPX track.
+pub fn to_gpx(points: &[TrackPoint]) -> String {
+    let mut out = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Radiadash\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n  <trk>\n    <name>Radiadash survey</name>\n    <trkseg>\n",
+    );
+    for point in points {
+        let time = iso_time(point.ts);
+        if time.is_empty() {
+            out.push_str(&format!(
+                "      <trkpt lat=\"{:.7}\" lon=\"{:.7}\"></trkpt>\n",
+                point.lat, point.lon
+            ));
+        } else {
+            out.push_str(&format!(
+                "      <trkpt lat=\"{:.7}\" lon=\"{:.7}\"><time>{}</time></trkpt>\n",
+                point.lat, point.lon, time
+            ));
+        }
+    }
+    out.push_str("    </trkseg>\n  </trk>\n</gpx>\n");
+    out
+}
+
+/// CSV with one row per point.
+pub fn to_csv(points: &[TrackPoint]) -> String {
+    let mut out = String::from("timestamp_ms,time,lat,lon,dose_rate_usvh,cps,source\n");
+    for point in points {
+        out.push_str(&format!(
+            "{},{},{:.7},{:.7},{},{},{}\n",
+            point.ts,
+            iso_time(point.ts),
+            point.lat,
+            point.lon,
+            point
+                .dose_rate_usvh
+                .map(|v| format!("{v:.6}"))
+                .unwrap_or_default(),
+            point.cps.map(|v| format!("{v:.3}")).unwrap_or_default(),
+            point.source.replace(',', " "),
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -139,6 +217,24 @@ mod tests {
     fn skips_invalid_coordinates() {
         let text = r#"[{"lat":999,"lon":10},{"lat":59.9,"lon":10.7}]"#;
         assert_eq!(parse_rctrk(text, "test").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn exports_geojson_gpx_and_csv() {
+        let points = parse_rctrk(
+            r#"[{"lat":59.9,"lon":10.7,"doseRate":0.1,"date":1793224021}]"#,
+            "unit",
+        )
+        .unwrap();
+        let geojson = to_geojson(&points);
+        assert!(geojson.contains("FeatureCollection"));
+        assert!(geojson.contains("\"dose_rate_usvh\": 0.1"));
+        let gpx = to_gpx(&points);
+        assert_eq!(gpx.matches("<trkpt").count(), 1);
+        assert!(gpx.contains("2026-10-"));
+        let csv = to_csv(&points);
+        assert!(csv.starts_with("timestamp_ms,time,lat,lon"));
+        assert_eq!(csv.lines().count(), 2);
     }
 
     #[test]
