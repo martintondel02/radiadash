@@ -1,0 +1,22 @@
+[package]
+name = "radiadash-probe"
+description = "Command line probe for RadiaCode devices"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "radiadash-probe"
+path = "src/main.rs"
+
+[dependencies]
+radiadash-core = { path = "../radiadash-core" }
+radiadash-sim = { path = "../radiadash-sim" }
+tokio.workspace = true
+clap.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

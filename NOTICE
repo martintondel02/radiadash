@@ -1,0 +1,24 @@
+Radiadash
+=========
+
+This project implements the RadiaCode serial/BLE protocol based on the
+publicly documented, MIT-licensed reverse engineering work in:
+
+  cdump/radiacode — https://github.com/cdump/radiacode
+  Copyright (c) Maxim Andreev and contributors
+  Licensed under the MIT License.
+
+No source code from that project is copied verbatim into this repository;
+the protocol constants and decoding rules were re-implemented in Rust and
+cross-checked against the reference implementation.
+
+The .rctrk import format and spectrum interchange conventions follow the
+documented RadiaCode application formats and the MIT-licensed parser in
+Safecast/safecast-new-map.
+
+Isotope data (from M3 onwards) is derived from publicly available nuclear
+data evaluated by NNDC/ENSDF and IAEA; sources are cited per entry.
+
+Trademarks: "RadiaCode" is a trademark of its respective owner. This is an
+independent, unofficial project and is not affiliated with or endorsed by
+Radiacode.

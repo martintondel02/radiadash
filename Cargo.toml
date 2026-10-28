@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/radiadash-core", "crates/radiadash-sim", "crates/radiadash-probe"]
+exclude = ["apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/martintondel02/radiadash"
+authors = ["Martin Tondel"]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures = "0.3"
+async-trait = "0.1"
+nusb = "0.2"
+bluer = "0.17"
+encoding_rs = "0.8"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }

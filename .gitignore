@@ -1,0 +1,21 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Tauri
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target
+
+# Local data / captures
+*.jsonl
+!crates/radiadash-core/tests/fixtures/*.jsonl
+*.rctrk
+*.gpx
+.env
+.DS_Store

@@ -1,0 +1,13 @@
+[package]
+name = "radiadash-sim"
+description = "Synthetic device data and replay helpers for Radiadash"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+radiadash-core = { path = "../radiadash-core" }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true

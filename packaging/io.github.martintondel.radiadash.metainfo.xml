@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.martintondel.radiadash</id>
+  <name>Radiadash</name>
+  <summary>Dashboard and spectrometer for RadiaCode radiation detectors</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Radiadash connects to RadiaCode 110 detectors over Bluetooth or USB and shows
+      live count rates, dose, spectra, isotope candidates and geotagged surveys.
+    </p>
+    <p>All measurements are stored locally; nothing is uploaded.</p>
+  </description>
+  <launchable type="desktop-id">radiadash.desktop</launchable>
+  <url type="homepage">https://github.com/martintondel02/radiadash</url>
+  <developer_name>Martin Tondel</developer_name>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-10-28" />
+  </releases>
+</component>
