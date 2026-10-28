@@ -3,6 +3,9 @@
 An unofficial Linux dashboard for **RadiaCode 110** radiation detectors: live counts,
 dose, spectra, isotope candidates and geotagged surveys in one native app.
 
+**[Download the latest RPM](https://github.com/martintondel02/radiadash/releases/latest)** ·
+Fedora 44 x86_64 · unsigned, checksums are published with each release.
+
 > Status: **M5** — live dashboard, isotope candidates, calibration wizard, Geiger
 > audio, distributions, layout densities and a survey map fed by `.rctrk`/GPX
 > imports. Tested on a real RC-110 over BLE and USB.
@@ -42,42 +45,54 @@ Radiadash aims to be a fast, local-first desktop console:
 - Survey map: import `.rctrk` (Radiacode phone app) or GPX tracks, tag the live
   reading at a location, filter by time, export GeoJSON/GPX/CSV
 - In-app guides for every page (and a [markdown copy](docs/user-guide.md))
-
-![In-app guide drawer](docs/screenshot-guide.png)
 - Unit switching for dose rate, dose and count rate; dark/light themes
 - Sessions stored in SQLite with downsampled series queries
 
-## Requirements (Fedora 44)
+![In-app guide drawer](docs/screenshot-guide.png)
 
-```bash
-sudo dnf install webkit2gtk4.1-devel gtk3-devel libsoup3-devel \
-  javascriptcoregtk4.1-devel dbus-devel pkgconf-pkg-config gcc gcc-c++ make
-# Rust (https://rustup.rs) and Node 22+ with pnpm
-```
+## Install (Fedora 44)
 
-USB access needs a udev rule (the device is `0483:f123`, not a serial port):
-
-```bash
-sudo cp packaging/60-radiacode.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-## Install (RPM)
+1. Download `Radiadash-<version>-1.x86_64.rpm` from the
+   [releases page](https://github.com/martintondel02/radiadash/releases/latest).
+2. Install it and reload udev once so USB access works without root:
 
 ```bash
 sudo dnf install ./Radiadash-0.1.0-1.x86_64.rpm
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-The package includes the USB udev rule. See [docs/packaging.md](docs/packaging.md)
-for contents and build details.
+### Dependencies
 
-## Build and run
+The RPM declares `gtk3` and `webkit2gtk4.1`; both are already installed on a
+standard Fedora Workstation. If `dnf` reports a missing library, install them
+explicitly:
+
+```bash
+sudo dnf install gtk3 webkit2gtk4.1
+```
+
+Bluetooth uses the system BlueZ daemon (enabled by default). USB does **not**
+need root: the package ships `/usr/lib/udev/rules.d/60-radiacode.rules`, which
+grants the logged-in user access to the detector (`0483:f123`).
+
+The package is **unsigned** — check the SHA-256 on the release page if you want
+to verify the download. Data is stored in
+`~/.local/share/io.github.martintondel.radiadash/`.
+
+## Build from source
+
+Build dependencies (Fedora 44):
+
+```bash
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libsoup3-devel \
+  javascriptcoregtk4.1-devel dbus-devel pkgconf-pkg-config gcc gcc-c++ make rpm-build
+# Rust: https://rustup.rs · Node 22+ with pnpm
+```
 
 ```bash
 pnpm install
 pnpm tauri dev                 # development
-pnpm tauri build --bundles rpm # package (RPM)
+pnpm tauri build --bundles rpm # package → apps/desktop/src-tauri/target/release/bundle/rpm/
 ```
 
 Without a device, use the simulator:
@@ -85,6 +100,9 @@ Without a device, use the simulator:
 ```bash
 cargo run -p radiadash-probe -- sim
 ```
+
+See [docs/packaging.md](docs/packaging.md) for package contents, signing and
+release notes.
 
 ## Probe (hardware bring-up)
 

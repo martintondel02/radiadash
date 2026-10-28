@@ -2,6 +2,10 @@
 
 Radiadash ships as an RPM (primary) with an AppImage planned.
 
+Published release: <https://github.com/martintondel02/radiadash/releases/tag/v0.1.0>
+(`Radiadash-0.1.0-1.x86_64.rpm`, SHA-256
+`f0ce3d56b913c4b5a7f8a13b7713280aeed1975760a1733cee08f1d87f25e61f`).
+
 ## Build
 
 ```bash
@@ -28,8 +32,9 @@ apps/desktop/src-tauri/target/release/bundle/rpm/Radiadash-0.1.0-1.x86_64.rpm
 | `/usr/share/icons/hicolor/*/apps/radiadash.png` | icons |
 | `/usr/lib/udev/rules.d/60-radiacode.rules` | USB access without root |
 
-Runtime dependencies are only `libgtk-3.so.0` and `libwebkit2gtk-4.1.so.0`; SQLite
-is bundled into the binary.
+Runtime dependencies are only `libgtk-3.so.0` and `libwebkit2gtk-4.1.so.0` (packages
+`gtk3` and `webkit2gtk4.1`); SQLite is bundled into the binary. Both are present on
+a standard Fedora Workstation.
 
 ## Install
 
