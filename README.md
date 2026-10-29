@@ -33,8 +33,11 @@ Radiadash aims to be a fast, local-first desktop console:
 - Live CPS with error bars and a rolling chart, dose rate, accumulated dose
 - Device panel: serial, firmware, battery, temperature, transport, flags
 - Spectrum read every 60 s, stored and rendered with the device calibration
-- Isotope candidates (35 nuclides, 100 lines) with confidence bands, a per-line
+- Isotope candidates (74 nuclides, ~196 lines) with confidence bands, a per-line
   evidence table, a library-line fingerprint overlay and a calibration hint
+- Spectrum hover inspection: isotope labels per peak, click to pin, double-click
+  or button to zoom to a peak, log/linear scale, y-axis grid
+- Clear the device spectrum (and reset accumulated dose) from the UI
 - Calibration wizard: robust fit of a0/a1/a2 from identified peaks, RMS guard,
   explicit confirmation before writing to the device
 - Geiger audio generated from the measured CPS (Poisson-jittered clicks)
@@ -57,7 +60,7 @@ Radiadash aims to be a fast, local-first desktop console:
 2. Install it and reload udev once so USB access works without root:
 
 ```bash
-sudo dnf install ./Radiadash-0.1.0-1.x86_64.rpm
+sudo dnf install ./Radiadash-0.2.0-1.x86_64.rpm
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
@@ -142,6 +145,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/protocol.md](docs/protoc
 | M3 ✅ | Spectrum analysis, isotope library, fingerprint overlay, evidence UI |
 | M4 ✅ | Calibration wizard, distributions, Geiger audio, layout density |
 | M5 ✅ | Map view, `.rctrk`/GPX import, dose-coloured track (live geotagging pending) |
+| v0.2.0 | Expanded isotope library, spectrum hover/zoom, device spectrum reset |
 | M6 🚧 | RPM packaging ✅ · device settings, AppImage, release workflow pending |
 
 ## Credits and licence

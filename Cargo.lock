@@ -769,7 +769,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "radiadash-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "bluer",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "radiadash-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "radiadash-sim"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "radiadash-core",

@@ -43,6 +43,11 @@ region to inspect a peak.
   usually medium.
 - **Δ** is measured minus expected energy. A median offset above a few keV means
   the device calibration is drifting.
+- **Hover** a peak to see its energy, net counts, significance and the isotopes it
+  matches (with Δ). Click to pin it, double-click or press *zoom to peak* to zoom.
+- **log / linear** switches the vertical scale; the y-axis shows decade grid lines.
+- **new spectrum** clears the device's spectrum buffer (after confirmation) and
+  starts a fresh measurement; **refresh** reads the current spectrum immediately.
 
 Isotope results are candidates, not a certified identification.
 

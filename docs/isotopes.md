@@ -6,8 +6,8 @@ identification.
 
 ## Library
 
-`data/isotopes/library.json` (version `2026.10-r1`) contains ~35 nuclides and
-~100 gamma lines:
+`data/isotopes/library.json` (version `2026.10-r2`) contains 74 nuclides and
+196 gamma lines:
 
 - NORM chains: K-40, U-238 series (Th-234, Ra-226, Pb-214, Bi-214), Th-232 series
   (Ac-228, Pb-212, Tl-208), U-235
@@ -38,14 +38,16 @@ identification only. Verify against NNDC/ENSDF before quantitative use.
 
 | Level | Rule |
 | --- | --- |
-| high | ≥2 matched lines with ≥50 % intensity coverage and score ≥0.65, or one strong line (≥50 % intensity) within 2.5 keV |
-| medium | score ≥0.45, or ≥2 lines with ≥20 % coverage |
+| high | ≥2 matched lines, ≥50 % intensity coverage, score ≥0.65 and at least one line ≥20 % intensity |
+| medium | one strong line (≥50 % intensity, within 1.5 keV), or ≥2 lines with ≥25 % coverage, or score ≥0.45 |
 | low | any other match |
 
 ## Known limitations
 
 - No detector efficiency curve, so peak areas are not converted to activities.
 - A single line can belong to several nuclides (511 keV, 583 keV, 609 keV…).
+- With a large library, single-line coincidences are common; that is why a single
+  line can never reach "high" confidence.
 - The device's energy calibration can be off by ~1 %; the UI shows the median
   offset of matched lines as a hint.
 - Escape peaks, backscatter and sum peaks are not modelled.

@@ -2,9 +2,9 @@
 
 Radiadash ships as an RPM (primary) with an AppImage planned.
 
-Published release: <https://github.com/martintondel02/radiadash/releases/tag/v0.1.0>
-(`Radiadash-0.1.0-1.x86_64.rpm`, SHA-256
-`f0ce3d56b913c4b5a7f8a13b7713280aeed1975760a1733cee08f1d87f25e61f`).
+Published release: <https://github.com/martintondel02/radiadash/releases/tag/v0.2.0>
+(`Radiadash-0.2.0-1.x86_64.rpm`, SHA-256
+`8846ce850d10f5d482506061c1eb144e8f6a397136a69f9baf11c01fa49f4f75`).
 
 ## Build
 

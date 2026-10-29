@@ -66,6 +66,14 @@ export async function setEnergyCalibration(coefficients: [number, number, number
   return invoke("set_energy_calibration", { coefficients });
 }
 
+export async function resetSpectrum(): Promise<void> {
+  return invoke("reset_spectrum");
+}
+
+export async function refreshSpectrum(): Promise<void> {
+  return invoke("refresh_spectrum");
+}
+
 export async function resetDose(): Promise<void> {
   return invoke("reset_dose");
 }
@@ -88,6 +96,10 @@ export function onSpectrum(cb: (value: SpectrumPayload) => void): Promise<Unlist
 
 export function onAnalysis(cb: (value: Analysis) => void): Promise<UnlistenFn> {
   return listen<Analysis>("analysis", (event) => cb(event.payload));
+}
+
+export function onSpectrumCleared(cb: () => void): Promise<UnlistenFn> {
+  return listen("spectrum-cleared", () => cb());
 }
 
 export function onCalibration(cb: (value: [number, number, number]) => void): Promise<UnlistenFn> {

@@ -1,9 +1,13 @@
 {
   "name": "radiadash",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packageManager": "pnpm@10.18.0",
-  "pnpm": { "onlyBuiltDependencies": ["esbuild"] },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
   "scripts": {
     "dev": "pnpm --filter @radiadash/desktop dev",
     "build": "pnpm --filter @radiadash/desktop build",

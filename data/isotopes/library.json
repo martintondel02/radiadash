@@ -1,7 +1,7 @@
 {
-  "version": "2026.10-r1",
+  "version": "2026.10-r2",
   "source": "Curated from NNDC/ENSDF evaluated nuclear data; intensities rounded for identification, not for quantitative assays.",
-  "review": "Energies within ~0.1 keV, intensities rounded to 0.1%. Verify against ENSDF before quantitative use.",
+  "review": "Energies within ~0.1 keV, intensities rounded. Verify against ENSDF before quantitative use.",
   "isotopes": [
     {
       "id": "Cs-137",
@@ -680,6 +680,702 @@
         {
           "energy_kev": 81.0,
           "intensity": 37.0
+        }
+      ]
+    },
+    {
+      "id": "Mn-54",
+      "name": "Manganese-54",
+      "half_life": "312.2 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 834.848,
+          "intensity": 99.98
+        }
+      ]
+    },
+    {
+      "id": "Co-58",
+      "name": "Cobalt-58",
+      "half_life": "70.86 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 810.776,
+          "intensity": 99.45
+        },
+        {
+          "energy_kev": 863.95,
+          "intensity": 0.68
+        }
+      ]
+    },
+    {
+      "id": "Zn-65",
+      "name": "Zinc-65",
+      "half_life": "243.9 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 1115.539,
+          "intensity": 50.6
+        }
+      ]
+    },
+    {
+      "id": "Sc-46",
+      "name": "Scandium-46",
+      "half_life": "83.79 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 889.277,
+          "intensity": 99.98
+        },
+        {
+          "energy_kev": 1120.545,
+          "intensity": 99.99
+        }
+      ]
+    },
+    {
+      "id": "Na-24",
+      "name": "Sodium-24",
+      "half_life": "14.96 h",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 1368.633,
+          "intensity": 99.99
+        },
+        {
+          "energy_kev": 2754.03,
+          "intensity": 99.86
+        }
+      ]
+    },
+    {
+      "id": "K-42",
+      "name": "Potassium-42",
+      "half_life": "12.36 h",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 1524.7,
+          "intensity": 18.3
+        }
+      ]
+    },
+    {
+      "id": "Sb-124",
+      "name": "Antimony-124",
+      "half_life": "60.2 d",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 602.73,
+          "intensity": 98.1
+        },
+        {
+          "energy_kev": 1691.0,
+          "intensity": 48.7
+        },
+        {
+          "energy_kev": 722.78,
+          "intensity": 10.9
+        },
+        {
+          "energy_kev": 645.85,
+          "intensity": 7.3
+        },
+        {
+          "energy_kev": 1368.2,
+          "intensity": 2.5
+        }
+      ]
+    },
+    {
+      "id": "Cs-136",
+      "name": "Cesium-136",
+      "half_life": "13.16 d",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 818.5,
+          "intensity": 99.7
+        },
+        {
+          "energy_kev": 1048.1,
+          "intensity": 79.9
+        },
+        {
+          "energy_kev": 340.6,
+          "intensity": 48.0
+        },
+        {
+          "energy_kev": 1235.4,
+          "intensity": 20.0
+        }
+      ]
+    },
+    {
+      "id": "Cs-138",
+      "name": "Cesium-138",
+      "half_life": "33.4 min",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 1435.8,
+          "intensity": 76.3
+        },
+        {
+          "energy_kev": 1009.8,
+          "intensity": 29.4
+        },
+        {
+          "energy_kev": 462.7,
+          "intensity": 30.4
+        },
+        {
+          "energy_kev": 547.0,
+          "intensity": 11.0
+        }
+      ]
+    },
+    {
+      "id": "La-140",
+      "name": "Lanthanum-140",
+      "half_life": "40.27 h",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 1596.2,
+          "intensity": 95.4
+        },
+        {
+          "energy_kev": 487.02,
+          "intensity": 45.9
+        },
+        {
+          "energy_kev": 815.8,
+          "intensity": 23.6
+        },
+        {
+          "energy_kev": 328.76,
+          "intensity": 20.6
+        }
+      ]
+    },
+    {
+      "id": "Ce-141",
+      "name": "Cerium-141",
+      "half_life": "32.5 d",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 145.44,
+          "intensity": 48.2
+        }
+      ]
+    },
+    {
+      "id": "Ce-143",
+      "name": "Cerium-143",
+      "half_life": "33.0 h",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 293.27,
+          "intensity": 42.8
+        },
+        {
+          "energy_kev": 664.6,
+          "intensity": 5.4
+        }
+      ]
+    },
+    {
+      "id": "Nd-147",
+      "name": "Neodymium-147",
+      "half_life": "10.98 d",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 531.0,
+          "intensity": 13.1
+        },
+        {
+          "energy_kev": 91.1,
+          "intensity": 28.0
+        }
+      ]
+    },
+    {
+      "id": "Ru-103",
+      "name": "Ruthenium-103",
+      "half_life": "39.25 d",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 497.08,
+          "intensity": 91.0
+        },
+        {
+          "energy_kev": 610.33,
+          "intensity": 5.6
+        }
+      ]
+    },
+    {
+      "id": "I-132",
+      "name": "Iodine-132",
+      "half_life": "2.30 h",
+      "category": "fallout",
+      "lines": [
+        {
+          "energy_kev": 667.72,
+          "intensity": 98.7
+        },
+        {
+          "energy_kev": 772.6,
+          "intensity": 75.6
+        },
+        {
+          "energy_kev": 954.55,
+          "intensity": 19.1
+        },
+        {
+          "energy_kev": 522.65,
+          "intensity": 16.4
+        }
+      ]
+    },
+    {
+      "id": "I-123",
+      "name": "Iodine-123",
+      "half_life": "13.22 h",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 158.97,
+          "intensity": 83.3
+        }
+      ]
+    },
+    {
+      "id": "I-124",
+      "name": "Iodine-124",
+      "half_life": "4.18 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 602.72,
+          "intensity": 62.9
+        },
+        {
+          "energy_kev": 722.78,
+          "intensity": 10.4
+        },
+        {
+          "energy_kev": 645.85,
+          "intensity": 11.2
+        },
+        {
+          "energy_kev": 1691.0,
+          "intensity": 11.2
+        }
+      ]
+    },
+    {
+      "id": "Xe-135",
+      "name": "Xenon-135",
+      "half_life": "9.14 h",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 249.8,
+          "intensity": 90.0
+        }
+      ]
+    },
+    {
+      "id": "Ra-223",
+      "name": "Radium-223",
+      "half_life": "11.43 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 269.46,
+          "intensity": 13.7
+        },
+        {
+          "energy_kev": 154.21,
+          "intensity": 5.6
+        },
+        {
+          "energy_kev": 323.87,
+          "intensity": 3.9
+        },
+        {
+          "energy_kev": 338.28,
+          "intensity": 2.8
+        }
+      ]
+    },
+    {
+      "id": "Th-227",
+      "name": "Thorium-227",
+      "half_life": "18.68 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 235.97,
+          "intensity": 12.3
+        },
+        {
+          "energy_kev": 256.23,
+          "intensity": 7.0
+        },
+        {
+          "energy_kev": 329.85,
+          "intensity": 2.9
+        }
+      ]
+    },
+    {
+      "id": "Au-198",
+      "name": "Gold-198",
+      "half_life": "2.69 d",
+      "category": "industrial",
+      "lines": [
+        {
+          "energy_kev": 411.802,
+          "intensity": 95.6
+        }
+      ]
+    },
+    {
+      "id": "Hg-203",
+      "name": "Mercury-203",
+      "half_life": "46.59 d",
+      "category": "industrial",
+      "lines": [
+        {
+          "energy_kev": 279.195,
+          "intensity": 81.5
+        }
+      ]
+    },
+    {
+      "id": "Tl-201",
+      "name": "Thallium-201",
+      "half_life": "3.04 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 167.43,
+          "intensity": 10.0
+        },
+        {
+          "energy_kev": 135.34,
+          "intensity": 2.6
+        }
+      ]
+    },
+    {
+      "id": "Bi-207",
+      "name": "Bismuth-207",
+      "half_life": "31.55 y",
+      "category": "calibration",
+      "lines": [
+        {
+          "energy_kev": 569.698,
+          "intensity": 97.8
+        },
+        {
+          "energy_kev": 1063.66,
+          "intensity": 74.5
+        },
+        {
+          "energy_kev": 1770.24,
+          "intensity": 6.9
+        }
+      ]
+    },
+    {
+      "id": "Eu-154",
+      "name": "Europium-154",
+      "half_life": "8.60 y",
+      "category": "calibration",
+      "lines": [
+        {
+          "energy_kev": 123.07,
+          "intensity": 40.4
+        },
+        {
+          "energy_kev": 1274.43,
+          "intensity": 34.8
+        },
+        {
+          "energy_kev": 723.3,
+          "intensity": 20.0
+        },
+        {
+          "energy_kev": 1004.72,
+          "intensity": 17.9
+        },
+        {
+          "energy_kev": 873.18,
+          "intensity": 12.1
+        }
+      ]
+    },
+    {
+      "id": "Eu-155",
+      "name": "Europium-155",
+      "half_life": "4.75 y",
+      "category": "calibration",
+      "lines": [
+        {
+          "energy_kev": 105.3,
+          "intensity": 21.0
+        },
+        {
+          "energy_kev": 86.5,
+          "intensity": 30.7
+        }
+      ]
+    },
+    {
+      "id": "Tb-160",
+      "name": "Terbium-160",
+      "half_life": "72.3 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 879.38,
+          "intensity": 30.1
+        },
+        {
+          "energy_kev": 966.17,
+          "intensity": 25.0
+        },
+        {
+          "energy_kev": 298.58,
+          "intensity": 26.0
+        },
+        {
+          "energy_kev": 1178.0,
+          "intensity": 14.9
+        }
+      ]
+    },
+    {
+      "id": "Yb-169",
+      "name": "Ytterbium-169",
+      "half_life": "32.0 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 197.96,
+          "intensity": 35.9
+        },
+        {
+          "energy_kev": 177.21,
+          "intensity": 22.4
+        },
+        {
+          "energy_kev": 109.78,
+          "intensity": 17.4
+        },
+        {
+          "energy_kev": 130.52,
+          "intensity": 11.4
+        },
+        {
+          "energy_kev": 63.12,
+          "intensity": 43.5
+        }
+      ]
+    },
+    {
+      "id": "Hf-181",
+      "name": "Hafnium-181",
+      "half_life": "42.4 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 482.18,
+          "intensity": 80.5
+        },
+        {
+          "energy_kev": 133.0,
+          "intensity": 43.4
+        },
+        {
+          "energy_kev": 345.9,
+          "intensity": 15.1
+        }
+      ]
+    },
+    {
+      "id": "Ta-182",
+      "name": "Tantalum-182",
+      "half_life": "114.7 d",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 1121.3,
+          "intensity": 35.2
+        },
+        {
+          "energy_kev": 1221.4,
+          "intensity": 27.2
+        },
+        {
+          "energy_kev": 1231.0,
+          "intensity": 11.6
+        },
+        {
+          "energy_kev": 100.1,
+          "intensity": 14.3
+        },
+        {
+          "energy_kev": 152.4,
+          "intensity": 7.0
+        }
+      ]
+    },
+    {
+      "id": "W-187",
+      "name": "Tungsten-187",
+      "half_life": "23.72 h",
+      "category": "activation",
+      "lines": [
+        {
+          "energy_kev": 685.8,
+          "intensity": 27.3
+        },
+        {
+          "energy_kev": 479.5,
+          "intensity": 26.6
+        }
+      ]
+    },
+    {
+      "id": "Pb-203",
+      "name": "Lead-203",
+      "half_life": "51.9 h",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 279.195,
+          "intensity": 81.0
+        },
+        {
+          "energy_kev": 401.3,
+          "intensity": 3.5
+        }
+      ]
+    },
+    {
+      "id": "Gd-153",
+      "name": "Gadolinium-153",
+      "half_life": "240.4 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 97.43,
+          "intensity": 29.5
+        },
+        {
+          "energy_kev": 103.18,
+          "intensity": 21.9
+        }
+      ]
+    },
+    {
+      "id": "Re-186",
+      "name": "Rhenium-186",
+      "half_life": "3.72 d",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 137.16,
+          "intensity": 9.4
+        }
+      ]
+    },
+    {
+      "id": "Re-188",
+      "name": "Rhenium-188",
+      "half_life": "17.0 h",
+      "category": "medical",
+      "lines": [
+        {
+          "energy_kev": 155.0,
+          "intensity": 15.1
+        }
+      ]
+    },
+    {
+      "id": "Pu-239",
+      "name": "Plutonium-239",
+      "half_life": "2.41e4 y",
+      "category": "industrial",
+      "lines": [
+        {
+          "energy_kev": 375.05,
+          "intensity": 0.66
+        },
+        {
+          "energy_kev": 413.71,
+          "intensity": 0.6
+        }
+      ]
+    },
+    {
+      "id": "Cm-243",
+      "name": "Curium-243",
+      "half_life": "29.1 y",
+      "category": "industrial",
+      "lines": [
+        {
+          "energy_kev": 277.6,
+          "intensity": 6.0
+        },
+        {
+          "energy_kev": 209.75,
+          "intensity": 3.9
+        },
+        {
+          "energy_kev": 228.3,
+          "intensity": 3.2
+        }
+      ]
+    },
+    {
+      "id": "Ra-224",
+      "name": "Radium-224",
+      "half_life": "3.63 d",
+      "category": "norm",
+      "lines": [
+        {
+          "energy_kev": 240.99,
+          "intensity": 4.1
+        }
+      ]
+    },
+    {
+      "id": "Pb-210",
+      "name": "Lead-210",
+      "half_life": "22.2 y",
+      "category": "norm",
+      "lines": [
+        {
+          "energy_kev": 46.54,
+          "intensity": 4.25
         }
       ]
     }

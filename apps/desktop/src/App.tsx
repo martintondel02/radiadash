@@ -615,10 +615,33 @@ function calibrationHint(candidate: Candidate): string | null {
 }
 
 function SpectrumView() {
-  const { spectrum, analysis } = useApp();
+  const { spectrum, analysis, clearSpectrum, refreshSpectrumNow, status } = useApp();
+  const connected = status === "connected";
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [focusChannel, setFocusChannel] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
   const candidates = analysis?.candidates ?? [];
   const selected = candidates.find((candidate) => candidate.id === selectedId) ?? candidates[0] ?? null;
+
+  const matches = useMemo(() => {
+    const map = new Map<number, { id: string; confidence: string; delta: number; intensity: number }[]>();
+    for (const candidate of candidates) {
+      for (const evidence of candidate.evidence) {
+        if (!evidence.matched || evidence.peak_channel == null) continue;
+        const list = map.get(evidence.peak_channel) ?? [];
+        list.push({
+          id: candidate.id,
+          confidence: candidate.confidence,
+          delta: evidence.delta_kev ?? 0,
+          intensity: evidence.intensity,
+        });
+        map.set(evidence.peak_channel, list);
+      }
+    }
+    for (const list of map.values()) list.sort((a, b) => Math.abs(a.delta) - Math.abs(b.delta));
+    return map;
+  }, [candidates]);
 
   const overlay = selected
     ? {
@@ -626,20 +649,62 @@ function SpectrumView() {
       }
     : undefined;
 
+  const handleClear = async () => {
+    if (
+      !window.confirm(
+        "Clear the spectrum on the device and start a new measurement?\n\nThe current spectrum and its isotope analysis will be discarded. Accumulated dose is not affected.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await clearSpectrum();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <Card
         title={`Energy spectrum${selected ? ` · ${selected.id}` : ""}`}
         className="lg:col-span-2"
         action={
-          <span className="text-[10px] text-[var(--muted)]">
-            {analysis ? `${analysis.peaks.length} peaks · ${analysis.total_counts.toLocaleString()} counts` : "analysing…"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[var(--muted)]">
+              {analysis ? `${analysis.peaks.length} peaks · ${analysis.total_counts.toLocaleString()} counts` : "analysing…"}
+            </span>
+            <button
+              onClick={() => void refreshSpectrumNow()}
+              disabled={!connected}
+              className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-40"
+              title="Read a fresh spectrum now"
+            >
+              refresh
+            </button>
+            <button
+              onClick={() => void handleClear()}
+              disabled={busy || !connected}
+              className="rounded border border-[var(--danger)] px-1.5 py-0.5 text-[10px] text-[var(--danger)] disabled:opacity-40"
+              title="Reset the device spectrum and start over"
+            >
+              {busy ? "clearing…" : "new spectrum"}
+            </button>
+          </div>
         }
       >
-        <SpectrumChart spectrum={spectrum} height={320} overlay={overlay} />
+        <SpectrumChart
+          spectrum={spectrum}
+          height={360}
+          overlay={overlay}
+          peaks={analysis?.peaks ?? []}
+          matches={matches}
+          focusChannel={focusChannel}
+        />
         <p className="mt-2 text-[10px] text-[var(--muted)]">
-          Amber sticks are library lines matched to a peak; dashed grey sticks are expected but not observed.
+          Hover a peak for its isotope match, click to pin it, double-click to zoom. Amber sticks are matched library
+          lines; dashed grey sticks are expected but not observed.
         </p>
       </Card>
 
@@ -717,14 +782,38 @@ function SpectrumView() {
 
       <Card title="Detected peaks" className="lg:col-span-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {(analysis?.peaks ?? []).slice(0, 12).map((peak) => (
-            <div key={peak.channel} className="rounded border border-[var(--border)] px-2 py-1.5">
-              <div className="num text-sm text-[var(--accent)]">{peak.energy_kev.toFixed(1)} keV</div>
-              <div className="num text-[10px] text-[var(--muted)]">
-                net {Math.round(peak.net).toLocaleString()} · {peak.significance.toFixed(1)}σ
-              </div>
-            </div>
-          ))}
+          {(analysis?.peaks ?? []).slice(0, 16).map((peak) => {
+            const list = matches.get(peak.channel) ?? [];
+            return (
+              <button
+                key={peak.channel}
+                onClick={() => setFocusChannel(peak.channel)}
+                className="rounded border border-[var(--border)] px-2 py-1.5 text-left hover:border-[var(--accent-dim)]"
+                title="Zoom to this peak"
+              >
+                <div className="num text-sm text-[var(--accent)]">{peak.energy_kev.toFixed(1)} keV</div>
+                <div className="num text-[10px] text-[var(--muted)]">
+                  net {Math.round(peak.net).toLocaleString()} · {peak.significance.toFixed(1)}σ
+                </div>
+                {list.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {list.slice(0, 2).map((match) => (
+                      <span
+                        key={match.id}
+                        className="rounded-full px-1.5 py-0.5 text-[9px]"
+                        style={{
+                          color: match.confidence === "high" ? "#4fd1c5" : match.confidence === "medium" ? "#f0b429" : "#8ea1ad",
+                          border: "1px solid currentColor",
+                        }}
+                      >
+                        {match.id}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </Card>
     </div>
@@ -980,6 +1069,42 @@ export default function App() {
                 <DeviceDetails />
               </Card>
               <CalibrationCard />
+              <Card title="Maintenance">
+                <p className="text-[11px] leading-relaxed text-[var(--muted)]">
+                  These actions change the device, not just the UI.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Reset the accumulated dose on the device?")) {
+                        void useApp.getState().resetDose();
+                      }
+                    }}
+                    className="rounded border border-[var(--border)] px-2 py-1 text-[11px] text-[var(--muted)] hover:text-[var(--text)]"
+                  >
+                    Reset accumulated dose
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "Clear the device spectrum and start a new measurement? Accumulated dose is not affected.",
+                        )
+                      ) {
+                        void useApp.getState().clearSpectrum();
+                      }
+                    }}
+                    className="rounded border border-[var(--danger)] px-2 py-1 text-[11px] text-[var(--danger)]"
+                  >
+                    Clear spectrum
+                  </button>
+                </div>
+                <p className="mt-3 text-[10px] leading-relaxed text-[var(--muted)]">
+                  Clearing the spectrum resets the device's spectrum buffer; the next read starts from zero and the
+                  isotope analysis is rebuilt from the new data.
+                </p>
+              </Card>
+
               <Card title="Geiger audio">
                 <label className="flex items-center gap-2 text-xs">
                   <input type="checkbox" checked={sound} onChange={(event) => setSound(event.target.checked)} />

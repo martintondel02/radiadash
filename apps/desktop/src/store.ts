@@ -33,6 +33,8 @@ interface AppStore {
   connect: (transport: ipc.TransportChoice) => Promise<void>;
   disconnect: () => Promise<void>;
   refreshSeries: (rangeSeconds: number) => Promise<void>;
+  clearSpectrum: () => Promise<void>;
+  refreshSpectrumNow: () => Promise<void>;
   resetDose: () => Promise<void>;
   loadTrack: () => Promise<void>;
   importTrack: (text: string, format: "rctrk" | "gpx", source?: string) => Promise<number>;
@@ -166,6 +168,7 @@ export const useApp = create<AppStore>((set, get) => ({
       }),
       ipc.onSpectrum((spectrum) => set({ spectrum })),
       ipc.onAnalysis((analysis) => set({ analysis })),
+      ipc.onSpectrumCleared(() => set({ spectrum: null, analysis: null })),
       ipc.onCalibration((calibration) => set({ calibration })),
       ipc.onDeviceError((message) => set({ message })),
     ]);
@@ -210,6 +213,17 @@ export const useApp = create<AppStore>((set, get) => ({
     } catch (error) {
       set({ message: String(error) });
     }
+  },
+
+  clearSpectrum: async () => {
+    await ipc.resetSpectrum();
+    set({ spectrum: null, analysis: null });
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await ipc.refreshSpectrum();
+  },
+
+  refreshSpectrumNow: async () => {
+    await ipc.refreshSpectrum();
   },
 
   refreshSeries: async (rangeSeconds) => {

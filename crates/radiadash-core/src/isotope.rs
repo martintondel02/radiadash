@@ -265,14 +265,20 @@ fn best_peak(peaks: &[Peak], energy: f64, tolerance: f64) -> Option<&Peak> {
 }
 
 fn confidence(matched: usize, coverage: f64, score: f64, evidence: &[Evidence]) -> &'static str {
+    // A single line is never enough for "high": with a 74-nuclide library many
+    // peaks coincide with some line. High needs two or more matched lines with
+    // real coverage, at least one of them reasonably strong.
+    let has_strong_line = evidence.iter().any(|item| item.matched && item.intensity >= 20.0);
     let strong_single = matched == 1
         && evidence.iter().any(|item| {
-            item.matched && item.intensity >= 50.0 && item.delta_kev.map(|d| d.abs() < 2.5).unwrap_or(false)
+            item.matched
+                && item.intensity >= 50.0
+                && item.delta_kev.map(|delta| delta.abs() < 1.5).unwrap_or(false)
         });
 
-    if strong_single || (matched >= 2 && coverage >= 0.5 && score >= 0.65) {
+    if matched >= 2 && coverage >= 0.5 && score >= 0.65 && has_strong_line {
         "high"
-    } else if matched >= 1 && (score >= 0.45 || (matched >= 2 && coverage >= 0.2)) {
+    } else if strong_single || (matched >= 2 && coverage >= 0.25) || score >= 0.45 {
         "medium"
     } else if matched >= 1 {
         "low"
@@ -422,7 +428,20 @@ mod tests {
         assert!(ids.contains(&"K-40"), "candidates: {ids:?}");
 
         let cs = analysis.candidates.iter().find(|c| c.id == "Cs-137").unwrap();
-        assert_eq!(cs.confidence, "high");
+        assert_eq!(cs.confidence, "medium");
+        assert!(analysis.candidates.iter().all(|c| c.confidence != "high"));
+    }
+
+    #[test]
+    fn two_strong_lines_reach_high_confidence() {
+        let spectrum = synthetic(&[(1173.2, 2600.0), (1332.5, 2500.0)]);
+        let analysis = analyze(&spectrum);
+        let co = analysis
+            .candidates
+            .iter()
+            .find(|c| c.id == "Co-60")
+            .expect("Co-60 should be detected");
+        assert_eq!(co.confidence, "high");
     }
 
     #[test]

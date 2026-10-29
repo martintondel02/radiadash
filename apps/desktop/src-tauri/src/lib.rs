@@ -42,7 +42,7 @@ fn app_info() -> AppInfo {
     AppInfo {
         name: "Radiadash",
         version: env!("CARGO_PKG_VERSION"),
-        core_version: "0.1.0",
+        core_version: env!("CARGO_PKG_VERSION"),
     }
 }
 
@@ -72,6 +72,26 @@ async fn set_spectrum_interval(state: State<'_, AppState>, seconds: u64) -> Resu
         .shared
         .tx
         .send(Cmd::SetSpectrumInterval(seconds))
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn reset_spectrum(state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::ResetSpectrum)
+        .await
+        .map_err(|_| "device manager stopped".to_string())
+}
+
+#[tauri::command]
+async fn refresh_spectrum(state: State<'_, AppState>) -> Result<(), String> {
+    state
+        .shared
+        .tx
+        .send(Cmd::RefreshSpectrum)
         .await
         .map_err(|_| "device manager stopped".to_string())
 }
@@ -305,6 +325,8 @@ pub fn run() {
             disconnect_device,
             set_spectrum_interval,
             set_energy_calibration,
+            reset_spectrum,
+            refresh_spectrum,
             reset_dose,
             get_snapshot,
             get_series,

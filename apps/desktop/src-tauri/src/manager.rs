@@ -39,6 +39,8 @@ pub enum Cmd {
     Connect(ConnectRequest),
     Disconnect,
     SetSpectrumInterval(u64),
+    ResetSpectrum,
+    RefreshSpectrum,
     SetCalibration([f32; 3]),
     ResetDose,
 }
@@ -172,6 +174,7 @@ pub async fn run(app: AppHandle, shared: Arc<Shared>, mut rx: mpsc::Receiver<Cmd
             Cmd::Connect(request) => run_connection(&app, &shared, &mut rx, &db, request).await,
             Cmd::Disconnect => {}
             Cmd::SetSpectrumInterval(_) => {}
+            Cmd::ResetSpectrum | Cmd::RefreshSpectrum => {}
             Cmd::SetCalibration(_) => {}
             Cmd::ResetDose => {}
         }
@@ -279,6 +282,24 @@ async fn run_connection(
                     ticks_until_spectrum = spectrum_interval;
                     shared.snapshot.write().await.spectrum_interval_s = spectrum_interval;
                 }
+                Some(Cmd::ResetSpectrum) => {
+                    match device.spectrum_reset().await {
+                        Ok(()) => {
+                            {
+                                let mut snapshot = shared.snapshot.write().await;
+                                snapshot.spectrum = None;
+                                snapshot.analysis = None;
+                            }
+                            let _ = app.emit("spectrum-cleared", ());
+                        }
+                        Err(err) => {
+                            let _ = app.emit("device-error", format!("spectrum reset failed: {err}"));
+                        }
+                    }
+                }
+                Some(Cmd::RefreshSpectrum) => {
+                    capture_spectrum(app, shared, db, session_id, &mut device).await;
+                }
                 Some(Cmd::SetCalibration(coefficients)) => {
                     match device.set_energy_calibration(coefficients).await {
                         Ok(()) => {
@@ -318,25 +339,7 @@ async fn run_connection(
                 ticks_until_spectrum = ticks_until_spectrum.saturating_sub(1);
                 if ticks_until_spectrum == 0 {
                     ticks_until_spectrum = spectrum_interval;
-                    match device.spectrum().await {
-                        Ok(spectrum) => {
-                            let payload = SpectrumPayload::from(&spectrum);
-                            if let Err(err) = with_db(db, |db| db.insert_spectrum(Some(session_id), payload.ts, &spectrum)) {
-                                let _ = app.emit("device-error", format!("store spectrum: {err}"));
-                            }
-                            let analysis = radiadash_core::isotope::analyze(&spectrum);
-                            {
-                                let mut snapshot = shared.snapshot.write().await;
-                                snapshot.spectrum = Some(payload.clone());
-                                snapshot.analysis = Some(analysis.clone());
-                            }
-                            let _ = app.emit("spectrum", payload);
-                            let _ = app.emit("analysis", analysis);
-                        }
-                        Err(err) => {
-                            let _ = app.emit("device-error", format!("spectrum read failed: {err}"));
-                        }
-                    }
+                    capture_spectrum(app, shared, db, session_id, &mut device).await;
                 }
             }
         }
@@ -355,6 +358,36 @@ async fn run_connection(
 }
 
 /// Convert and persist incoming records; returns the telemetry to publish.
+async fn capture_spectrum(
+    app: &AppHandle,
+    shared: &Arc<Shared>,
+    db: &Arc<Mutex<Db>>,
+    session_id: i64,
+    device: &mut RadiaCode,
+) {
+    match device.spectrum().await {
+        Ok(spectrum) => {
+            let payload = SpectrumPayload::from(&spectrum);
+            if let Err(err) = with_db(db, |db| {
+                db.insert_spectrum(Some(session_id), payload.ts, &spectrum)
+            }) {
+                let _ = app.emit("device-error", format!("store spectrum: {err}"));
+            }
+            let analysis = radiadash_core::isotope::analyze(&spectrum);
+            {
+                let mut snapshot = shared.snapshot.write().await;
+                snapshot.spectrum = Some(payload.clone());
+                snapshot.analysis = Some(analysis.clone());
+            }
+            let _ = app.emit("spectrum", payload);
+            let _ = app.emit("analysis", analysis);
+        }
+        Err(err) => {
+            let _ = app.emit("device-error", format!("spectrum read failed: {err}"));
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 struct Seed {
     dose_usv: Option<f64>,
